@@ -59,8 +59,6 @@ var scManager = (function(){
             DimensionsData: {},
             singleDimensionDataSuccesses: 0,
             DimensionsSelections: [],
-            ActualsArr: [],
-            AssumptionsArr: [],
             permitAssembleCharts: true, // permits/prevents assembleCharts from executing
             loadFailures: {} // counts data load attempt failures, keys by function name
         },
@@ -128,6 +126,12 @@ var scManager = (function(){
         dimensionsResults = {}, // holds Dimensions dropdown selections web method Results JSON string
         assumptionsResults = {}, // holds Assumptions web method Results JSON string
         ddRange = [], // range of numbers for Assumptions ("% Change") dropdown options
+        displaySectionNames = { // formatting of Actuals & Assumptions Section names
+            'Workforce': { displayName: 'Workforce Assumptions' },
+            'Business&Financial': { displayName: 'Business & Financial' },
+            'Learning': { displayName: 'Learning Dashboard' },
+            'Performance&Engagement': { displayName: 'Performance & Engagement' }
+        },
         /**
          config for top level dropdowns:
          resultsMembersID    = Id of web method result object member: {Results:Members:ID:Children}
@@ -1235,10 +1239,11 @@ var scManager = (function(){
 
     function reprintActuals() {
         loadActuals();
-        $J('.actualVal').each(function(index) {
+        /* TODO: fix this! */
+        /*$J('.actualVal').each(function(index) {
             var formattedVal = formatActualVal(smState.ActualsArr[index][0], smState.ActualsArr[index][2]);
             $J(this).html(formattedVal[1]);
-        });
+        });*/
     }
 
     /** Data Loads **/
@@ -1424,8 +1429,7 @@ var scManager = (function(){
                     tempArr.push([actTitle, actSect, actVal]);
                 }
             }
-            smState.ActualsArr = tempArr;
-            cb();
+            cb(tempArr);
         };
 
         onFailure = function() {
@@ -1476,8 +1480,7 @@ var scManager = (function(){
                 }
             }*/
 
-            smState.AssumptionsArr = tempArr;
-            cb();
+            cb(tempArr);
         };
 
         onFailure = function() {
@@ -1610,73 +1613,46 @@ var scManager = (function(){
         return returnStr;
     }
 
-    function buildActualsAndAssumptions() {
-        var displaySectionNames = { // formatting of Section names
-                'Workforce': { displayName: 'Workforce Assumptions' },
-                'Business&Financial': { displayName: 'Business & Financial' },
-                'Learning': { displayName: 'Learning Dashboard' },
-                'Performance&Engagement': { displayName: 'Performance & Engagement' }
-            },
+    function buildAssumptions(AssumptionsArr) {
+        var actualsExist,
             i = 0,
             newSectionTitle,
             arrSectionTitle,
-            arrActTitle,
-            arrActVal,
+            savedActVal,
             arrAssTitle,
-            arrAssVal,
-            formattedResult;
+            arrAssVal;
 
-        if (smState.ActualsArr.length !== smState.AssumptionsArr.length) { // error if array lengths not equal
-            consoleLog('buildActualAndAssumptions', ['Error importing Actuals and Assumptions, something is missing!'], {'Number of Actuals': smState.ActualsArr.length, 'Number of Assumptions': smState.AssumptionsArr.length}, 'error');
-        }
-        else {
-            newSectionTitle = '';
-            while (i < smState.ActualsArr.length) {
-                arrSectionTitle = smState.ActualsArr[i][1];
-                if (arrSectionTitle !== newSectionTitle) { // if new Section title found, print
-                    newSectionTitle = arrSectionTitle;
-                    if (arrSectionTitle in displaySectionNames) {
-                        arrSectionTitle = displaySectionNames[arrSectionTitle].displayName;
-                    }
-                    $J('#smEntities').append('<div class="sectContainer"><p class="sectTitle">+ ' + arrSectionTitle + '</p><table border="0"><thead><tr><th class="varGroupTH">- ' + arrSectionTitle + '</th><th class="varGroupVal">Actual</th><th class="varGroupVal">% Change</th></tr></thead><tbody></tbody></table></div>');
+        actualsExist = $J('#smEntities .actualVal').first().text() !== '' ? $J('#smEntities .actualVal') : null;
+
+        newSectionTitle = '';
+        while (i < AssumptionsArr.length) {
+            arrSectionTitle = AssumptionsArr[i][1];
+            if (arrSectionTitle !== newSectionTitle) { // if new Section title found, print
+                newSectionTitle = arrSectionTitle;
+                if (arrSectionTitle in displaySectionNames) {
+                    arrSectionTitle = displaySectionNames[arrSectionTitle].displayName;
                 }
-
-                // add rows to Section
-                arrActTitle = smState.ActualsArr[i][0];
-                arrActVal = smState.ActualsArr[i][2];
-                arrAssTitle = smState.AssumptionsArr[i][0];
-                arrAssVal = smState.AssumptionsArr[i][1];
-
-                if (arrActTitle !== arrAssTitle) { // test if Actuals and Assumptions source match
-                    $J('#smEntities').html('Error! Actuals and Assumptions rows do not match. On the same row we have Actual: ' + arrActTitle + ' & Assumption: ' + arrAssTitle);
-                    break;
-                }
-
-                formattedResult = formatActualVal(arrActTitle, arrActVal);
-                $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + formattedResult[0] + '</td><td class="actualVal">' + formattedResult[1] + '</td><td class="assumptionVal">' + buildAssumptionDD(formattedResult[0], arrAssVal) + '</td></tr>');
-                i++;
+                $J('#smEntities').append('<div class="sectContainer"><p class="sectTitle">+ ' + arrSectionTitle + '</p><table border="0"><thead><tr><th class="varGroupTH">- ' + arrSectionTitle + '</th><th class="varGroupVal">Actual</th><th class="varGroupVal">% Change</th></tr></thead><tbody></tbody></table></div>');
             }
-        }
 
-        if (smState.eventTrigger.pageLoad) {
-            collapseActualsAndAssumptions();
+            // add rows to Section
+            savedActVal = actualsExist ? actualsExist.eq(i).text() : '';
+            arrAssTitle = AssumptionsArr[i][0];
+            arrAssVal = AssumptionsArr[i][1];
+
+            $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + arrAssTitle + '</td><td class="actualVal">' + savedActVal + '</td><td class="assumptionVal">' + buildAssumptionDD(arrAssTitle, arrAssVal) + '</td></tr>');
+            i++;
         }
     }
 
     function buildActuals(ActualsArr) {
-        var displaySectionNames = { // formatting of Section names
-                'Workforce': { displayName: 'Workforce Assumptions' },
-                'Business&Financial': { displayName: 'Business & Financial' },
-                'Learning': { displayName: 'Learning Dashboard' },
-                'Performance&Engagement': { displayName: 'Performance & Engagement' }
-            },
-            assumptionsExist,
+        var assumptionsExist,
             i = 0,
             newSectionTitle,
             arrSectionTitle,
             arrActTitle,
             arrActVal,
-            arrAssVal,
+            savedAssVal,
             formattedResult;
 
         assumptionsExist = $J('#smEntities .assumptionVal').first().has('select').length ? $J('#smEntities .assumptionVal') : null;
@@ -1695,15 +1671,11 @@ var scManager = (function(){
             // add rows to Section
             arrActTitle = ActualsArr[i][0];
             arrActVal = ActualsArr[i][2];
-            arrAssVal = assumptionsExist ? assumptionsExist[i] : '';
+            savedAssVal = assumptionsExist ? assumptionsExist.eq(i).html() : '';
 
             formattedResult = formatActualVal(arrActTitle, arrActVal);
-            $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + formattedResult[0] + '</td><td class="actualVal">' + formattedResult[1] + '</td><td class="assumptionVal">' + arrAssVal + '</td></tr>');
+            $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + formattedResult[0] + '</td><td class="actualVal">' + formattedResult[1] + '</td><td class="assumptionVal">' + savedAssVal + '</td></tr>');
             i++;
-        }
-
-        if (smState.eventTrigger.pageLoad) {
-            collapseActualsAndAssumptions();
         }
     }
 
@@ -2131,16 +2103,19 @@ var scManager = (function(){
                             $J('#dimRowDropdowns').empty();
                         }
                         break;
-                    case 'ActualsAndAssumptions':
-                        if (smState.eventRequest.build.ActualsAndAssumptions){
-                            $J('#smEntities').empty();
+                    case 'Actuals':
+                        if (smState.eventRequest.build.Actuals){
+                            $J('#smEntities .actualVal').each(function(){
+                                $J(this).empty();
+                            });
                         }
                         break;
-                    case 'Actuals':
-                        if (smState.eventRequest.build.Actuals){}
-                        break;
                     case 'Assumptions':
-                        if (smState.eventRequest.build.Assumptions){}
+                        if (smState.eventRequest.build.Assumptions){
+                            $J('#smEntities .assumptionVal').each(function(){
+                                $J(this).empty();
+                            });
+                        }
                         break;
                     default:
                         consoleLog('init', ['Trying to build "' + key + '", a component that does not exist.'], null, 'error');
@@ -2162,16 +2137,15 @@ var scManager = (function(){
                             loadDimensionSelections(showDimensionSelections);
                         }
                         break;
-                    case 'ActualsAndAssumptions':
-                        if (smState.eventRequest.load.ActualsAndAssumptions){
-                            loadActuals(function(){ loadAssumptions(buildActualsAndAssumptions); });
+                    case 'Actuals':
+                        if (smState.eventRequest.load.Actuals){
+                            loadActuals(buildActuals);
                         }
                         break;
-                    case 'Actuals':
-                        if (smState.eventRequest.load.Actuals){}
-                        break;
                     case 'Assumptions':
-                        if (smState.eventRequest.load.Assumptions){}
+                        if (smState.eventRequest.load.Assumptions){
+                            loadAssumptions(buildAssumptions);
+                        }
                         break;
                     default:
                         consoleLog('init', ['Trying to load "' + key + '", this data does not exist.'], null, 'error');
@@ -2187,6 +2161,7 @@ var scManager = (function(){
 
         //TODO: set somewhere else - > setSMStateObj(smStateDefaults);
         //postInitProcessing();
+        //collapseActualsAndAssumptions();
 
         // TODO: end to processing queue
         // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
@@ -2208,12 +2183,14 @@ scManager.smInit({
         load: {
             Scenario: true,
             Dimensions: true,
-            ActualsAndAssumptions: true
+            Actuals: true,
+            Assumptions: true
         },
         build: {
             Scenario: true,
             Dimensions: true,
-            ActualsAndAssumptions: true
+            Actuals: true,
+            Assumptions: true
         }
     }
 });
