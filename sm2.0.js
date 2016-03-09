@@ -6,19 +6,26 @@
 
 var scManager = (function(){
 
-    /** Internally Shared Private Properties **/
+    /** Private Properties **/
 
     /*
     TODO: we may be able to align smState.smVals and saveDimensionSelections() values
     SM Dimension values need to be updated in the following locations:
         1. MASTER - > smState.smVals{}
-        2. SLAVE - > ddOnLoad{}
+        2. SLAVE - > DD_ON_LOAD{}
         3. SLAVE - > saveDimensionSelections()
      */
 
-    var smState = {
+    var EVENT_REQUEST_DEFAULTS = {
+            Scenario: false,
+            Dimensions: false,
+            Actuals: false,
+            Assumptions: false,
+            Charts: false
+        },
+        smState = {
             smVals: { // current SM values
-                Scenario: '', // not needed in ddOnLoad
+                Scenario: '', // not needed in DD_ON_LOAD
                 Period: '',
                 Division: '',
                 BusinessLine: '',
@@ -29,32 +36,8 @@ var scManager = (function(){
                 UDC1: '', // a.k.a. FunctionalGroup
                 JobFunction: ''
             },
-            eventTrigger: { // what initiated the event
-                pageLoad: false
-            },
-            eventRequest: { // what are we requesting that the SM do
-                load: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                },
-                build: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                },
-                refresh: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                }
-            },
+            eventTrigger: {}, // what initiated the event
+            eventRequest: {}, // what are we requesting that the SM do
             ScenarioNames: [],
             DimensionsData: {},
             singleDimensionDataSuccesses: 0,
@@ -62,39 +45,21 @@ var scManager = (function(){
             permitAssembleCharts: true, // permits/prevents assembleCharts from executing
             loadFailures: {} // counts data load attempt failures, keys by function name
         },
-        smStateDefaults = {
+        SM_STATE_DEFAULTS = {
             eventTrigger: { // what initiated the event
                 pageLoad: false
             },
             eventRequest: { // what are we requesting that the SM do
-                load: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                },
-                build: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                },
-                refresh: {
-                    Scenario: false,
-                    Dimensions: false,
-                    ActualsAndAssumptions: false,
-                    Actuals: false,
-                    Assumptions: false
-                }
+                load: EVENT_REQUEST_DEFAULTS,
+                build: EVENT_REQUEST_DEFAULTS,
+                refresh: EVENT_REQUEST_DEFAULTS
             }
         },
-        maxFails = 3, // user prompted when max is hit
-        defaultScenarioName = 'Actual', // value for default option of Scenario dropdown
-        savedScenarioKey = 'sasc', // key for URL param designating which Scenario is active
-        defOptNameChild = "More specifically...", // value for default option of Dimension child dropdowns
-        protectedScenarios = ['Benchmark', defaultScenarioName], // prevent delete option for these
+        MAX_FAILS = 3, // user prompted when max is hit
+        DEFAULT_SCENARIO_NAME = 'Actual', // value for default option of Scenario dropdown
+        SAVED_SCENARIO_KEY = 'sasc', // key for URL param designating which Scenario is active
+        DEF_CHILD_OPT_NAME = "More specifically...", // value for default option of Dimension child dropdowns
+        protectedScenarios = ['Benchmark', DEFAULT_SCENARIO_NAME], // prevent delete option for these
         spinnerOpts = { // Spinner options
             lines: 11, // The number of lines to draw
             length: 10, // The length of each line
@@ -126,7 +91,7 @@ var scManager = (function(){
         dimensionsResults = {}, // holds Dimensions dropdown selections web method Results JSON string
         assumptionsResults = {}, // holds Assumptions web method Results JSON string
         ddRange = [], // range of numbers for Assumptions ("% Change") dropdown options
-        displaySectionNames = { // formatting of Actuals & Assumptions Section names
+        DISPLAY_SECTION_NAMES = { // formatting of Actuals & Assumptions Section names
             'Workforce': { displayName: 'Workforce Assumptions' },
             'Business&Financial': { displayName: 'Business & Financial' },
             'Learning': { displayName: 'Learning Dashboard' },
@@ -144,7 +109,7 @@ var scManager = (function(){
          webMParamKey2       = web method 2nd parameter key
          webMParamVal2       = web method 2nd parameter value
          **/
-        ddOnLoad = {
+        DD_ON_LOAD = {
             Period: {
                 // TM1DimensionMembers?DimName=Period
                 resultsMembersID: 'All Years',
@@ -261,11 +226,15 @@ var scManager = (function(){
         var key,
             key2;
 
-        for (key in setToThisObj){
-            if (setToThisObj.hasOwnProperty(key)){
-                for (key2 in setToThisObj[key]){
-                    if (setToThisObj[key].hasOwnProperty(key2)){
-                        smState[key][key2] = setToThisObj[key][key2];
+        for (key in SM_STATE_DEFAULTS){
+            if (SM_STATE_DEFAULTS.hasOwnProperty(key)){
+                for (key2 in SM_STATE_DEFAULTS[key]){
+                    if (SM_STATE_DEFAULTS[key].hasOwnProperty(key2)){
+                        if (typeof setToThisObj[key] === 'undefined' || typeof setToThisObj[key][key2] === 'undefined'){
+                            smState[key][key2] = SM_STATE_DEFAULTS[key][key2];
+                        } else {
+                            smState[key][key2] = setToThisObj[key][key2];
+                        }
                     }
                 }
             }
@@ -459,7 +428,7 @@ var scManager = (function(){
             }
         } else {
             urlParams = getQueryParams(qString);
-            urlParams[savedScenarioKey] = paramsToAdd[savedScenarioKey];
+            urlParams[SAVED_SCENARIO_KEY] = paramsToAdd[SAVED_SCENARIO_KEY];
             for (key in urlParams) {
                 if (urlParams.hasOwnProperty(key)) {
                     newQString += separator + encodeURIComponent(key) + '=' + encodeURIComponent(urlParams[key]);
@@ -490,7 +459,7 @@ var scManager = (function(){
                 if (oldHref.indexOf('?') > -1) {
                     urlAndParams = oldHref.split('?'); // split loc & params
                     urlParams = getQueryParams(urlAndParams[1]); // check for existing 'scenario' value
-                    urlParams[savedScenarioKey] = smState.smVals.Scenario;
+                    urlParams[SAVED_SCENARIO_KEY] = smState.smVals.Scenario;
                     qString = '';
                     separator = '?';
                     for (key in urlParams) {
@@ -501,7 +470,7 @@ var scManager = (function(){
                     }
                     newHref = urlAndParams[0] + qString;
                 } else {
-                    newHref = oldHref + '?' + savedScenarioKey + '=' + smState.smVals.Scenario;
+                    newHref = oldHref + '?' + SAVED_SCENARIO_KEY + '=' + smState.smVals.Scenario;
                 }
 
                 $J(this).attr("href", newHref);
@@ -557,7 +526,7 @@ var scManager = (function(){
                 thisText = thisSel.find(':selected').text(),
                 thisElem;
 
-            if (thisText !== defOptNameChild) {
+            if (thisText !== DEF_CHILD_OPT_NAME) {
                 rtText = thisText;
             }
             if (isDefinedAndTrue(thisSel.find(':selected').attr('value'))) {
@@ -915,7 +884,7 @@ var scManager = (function(){
                 createNewScenario(newScenarioNameStr);
             };
 
-            if (smState.loadFailures.createNewScenario < maxFails){
+            if (smState.loadFailures.createNewScenario < MAX_FAILS){
                 (smState.loadFailures.createNewScenario)++;
                 createNewScenario(newScenarioNameStr);
             } else {
@@ -1039,12 +1008,12 @@ var scManager = (function(){
                 }
             });
 
-            setScenarioStateAndUrl(defaultScenarioName); // set to default Scenario
+            setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME); // set to default Scenario
             init(); // re-initialize
         };
 
         onFailure = function() {
-            if (smState.loadFailures.scenarioDeleteConfirmed < maxFails){
+            if (smState.loadFailures.scenarioDeleteConfirmed < MAX_FAILS){
                 (smState.loadFailures.scenarioDeleteConfirmed)++;
                 scenarioDeleteConfirmed();
             } else {
@@ -1075,7 +1044,7 @@ var scManager = (function(){
             onSuccess,
             onFailure;
 
-        /* TODO: see if you can align the dimRows values below with smState.smVals and ddOnLoad */
+        /* TODO: see if you can align the dimRows values below with smState.smVals and DD_ON_LOAD */
 
         for (key in dimRows) {
             if (dimRows.hasOwnProperty(key)) {
@@ -1084,31 +1053,31 @@ var scManager = (function(){
                         dimRows.Scenario = smState.smVals.Scenario;
                         break;
                     case 'SelectedYear':
-                        dimRows.SelectedYear = smState.smVals.Period ? smState.smVals.Period : ddOnLoad.Period.resultsMembersID;
+                        dimRows.SelectedYear = smState.smVals.Period ? smState.smVals.Period : DD_ON_LOAD.Period.resultsMembersID;
                         break;
                     case 'SelectedLegalEntity':
-                        dimRows.SelectedLegalEntity = smState.smVals.Division ? smState.smVals.Division : ddOnLoad.Division.resultsMembersID;
+                        dimRows.SelectedLegalEntity = smState.smVals.Division ? smState.smVals.Division : DD_ON_LOAD.Division.resultsMembersID;
                         break;
                     case 'SelectedBusinessUnit':
-                        dimRows.SelectedBusinessUnit = smState.smVals.BusinessLine ? smState.smVals.BusinessLine : ddOnLoad.BusinessLine.resultsMembersID;
+                        dimRows.SelectedBusinessUnit = smState.smVals.BusinessLine ? smState.smVals.BusinessLine : DD_ON_LOAD.BusinessLine.resultsMembersID;
                         break;
                     case 'SelectedRegion':
-                        dimRows.SelectedRegion = smState.smVals.Region ? smState.smVals.Region : ddOnLoad.Region.resultsMembersID;
+                        dimRows.SelectedRegion = smState.smVals.Region ? smState.smVals.Region : DD_ON_LOAD.Region.resultsMembersID;
                         break;
                     case 'SelectedWorkforceCategory':
-                        dimRows.SelectedWorkforceCategory = smState.smVals.WorkforceCategory ? smState.smVals.WorkforceCategory : ddOnLoad.workforceCategory.resultsMembersID;
+                        dimRows.SelectedWorkforceCategory = smState.smVals.WorkforceCategory ? smState.smVals.WorkforceCategory : DD_ON_LOAD.workforceCategory.resultsMembersID;
                         break;
                     case 'SelectedWorkerType':
-                        dimRows.SelectedWorkerType = smState.smVals.WorkerType ? smState.smVals.WorkerType : ddOnLoad.WorkerType.resultsMembersID;
+                        dimRows.SelectedWorkerType = smState.smVals.WorkerType ? smState.smVals.WorkerType : DD_ON_LOAD.WorkerType.resultsMembersID;
                         break;
                     case 'SelectedJobGrade':
-                        dimRows.SelectedJobGrade = smState.smVals.FLSA ? smState.smVals.FLSA : ddOnLoad.FLSA.resultsMembersID;
+                        dimRows.SelectedJobGrade = smState.smVals.FLSA ? smState.smVals.FLSA : DD_ON_LOAD.FLSA.resultsMembersID;
                         break;
                     case 'SelectedFunctionalGroup':
-                        dimRows.SelectedFunctionalGroup = smState.smVals.UDC1 ? smState.smVals.UDC1 : ddOnLoad.UDC1.resultsMembersID;
+                        dimRows.SelectedFunctionalGroup = smState.smVals.UDC1 ? smState.smVals.UDC1 : DD_ON_LOAD.UDC1.resultsMembersID;
                         break;
                     case 'SelectedJobFunction':
-                        dimRows.SelectedJobFunction = smState.smVals.JobFunction ? smState.smVals.JobFunction : ddOnLoad.JobFunction.resultsMembersID;
+                        dimRows.SelectedJobFunction = smState.smVals.JobFunction ? smState.smVals.JobFunction : DD_ON_LOAD.JobFunction.resultsMembersID;
                         break;
                     default:
                         consoleLog('saveDimensionSelections', ['Error on switch! Case not met for - ' + key], null, 'error');
@@ -1141,7 +1110,7 @@ var scManager = (function(){
         };
 
         onFailure = function() {
-            if (smState.loadFailures.saveDimensionSelections < maxFails){
+            if (smState.loadFailures.saveDimensionSelections < MAX_FAILS){
                 (smState.loadFailures.saveDimensionSelections)++;
                 saveDimensionSelections();
             } else {
@@ -1171,7 +1140,7 @@ var scManager = (function(){
             onSuccess,
             onFailure;
 
-        if (smState.smVals.Scenario === defaultScenarioName) {
+        if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
             modalMsg('erase');
             modalMsg('error', {
                 msgItem: {
@@ -1217,7 +1186,7 @@ var scManager = (function(){
         };
 
         onFailure = function() {
-            if (smState.loadFailures.saveAssumptions < maxFails){
+            if (smState.loadFailures.saveAssumptions < MAX_FAILS){
                 (smState.loadFailures.saveAssumptions)++;
                 saveAssumptions();
             } else {
@@ -1241,7 +1210,7 @@ var scManager = (function(){
         loadActuals();
         /* TODO: fix this! */
         /*$J('.actualVal').each(function(index) {
-            var formattedVal = formatActualVal(smState.ActualsArr[index][0], smState.ActualsArr[index][2]);
+            var formattedVal = formatActualVal(smState.actualsArr[index][0], smState.actualsArr[index][2]);
             $J(this).html(formattedVal[1]);
         });*/
     }
@@ -1272,7 +1241,7 @@ var scManager = (function(){
                 loadCurrScenarioData(cb);
             };
 
-            if (smState.loadFailures.loadCurrScenarioData < maxFails){
+            if (smState.loadFailures.loadCurrScenarioData < MAX_FAILS){
                 (smState.loadFailures.loadCurrScenarioData)++;
                 loadCurrScenarioData(cb);
             } else {
@@ -1299,7 +1268,7 @@ var scManager = (function(){
             smState.loadFailures[failureName] = 0;
             smState.DimensionsData[formattedName] = resultObj;
             (smState.singleDimensionDataSuccesses)++;
-            if (smState.singleDimensionDataSuccesses === Object.keys(ddOnLoad).length){
+            if (smState.singleDimensionDataSuccesses === Object.keys(DD_ON_LOAD).length){
                 smState.singleDimensionDataSuccesses = 0;
                 cb();
             }
@@ -1310,7 +1279,7 @@ var scManager = (function(){
                     loadSingleDimensionData(cb, method, parameters);
                 };
 
-            if (smState.loadFailures[failureName] < maxFails){
+            if (smState.loadFailures[failureName] < MAX_FAILS){
                 (smState.loadFailures[failureName])++;
                 loadSingleDimensionData(cb, method, parameters);
             } else {
@@ -1328,19 +1297,19 @@ var scManager = (function(){
         var key,
             params = {};
 
-        for (key in ddOnLoad){ // create this first so that "counter" is accurate in loadSingleDimensionData
-            if (ddOnLoad.hasOwnProperty(key)) {
+        for (key in DD_ON_LOAD){ // create this first so that "counter" is accurate in loadSingleDimensionData
+            if (DD_ON_LOAD.hasOwnProperty(key)) {
                 smState.DimensionsData[key] = {};
             }
         }
 
-        for (key in ddOnLoad) {
-            if (ddOnLoad.hasOwnProperty(key)) {
-                params[ddOnLoad[key].webMParamKey1] = ddOnLoad[key].webMParamVal1;
-                if (ddOnLoad[key].webMParamKey2) {
-                    params[ddOnLoad[key].webMParamKey2] = ddOnLoad[key].webMParamVal2;
+        for (key in DD_ON_LOAD) {
+            if (DD_ON_LOAD.hasOwnProperty(key)) {
+                params[DD_ON_LOAD[key].webMParamKey1] = DD_ON_LOAD[key].webMParamVal1;
+                if (DD_ON_LOAD[key].webMParamKey2) {
+                    params[DD_ON_LOAD[key].webMParamKey2] = DD_ON_LOAD[key].webMParamVal2;
                 }
-                loadSingleDimensionData(cb, ddOnLoad[key].methodName, params);
+                loadSingleDimensionData(cb, DD_ON_LOAD[key].methodName, params);
             }
         }
     }
@@ -1373,10 +1342,10 @@ var scManager = (function(){
             dimensionsResults = resultObj.Results; // save copy of Results JSON for post via saveDimensionSelections()
 
             dimensionArr.forEach(function(value, index) {
-                for (key in ddOnLoad) {
-                    if (ddOnLoad.hasOwnProperty(key)) {
-                        if (value === ddOnLoad[key].resultsMembersID && ddOnLoad[key].resultsMembersID !== ddOnLoad[key].defOptName) {
-                            dimensionArr[index] = ddOnLoad[key].defOptName; // intention is to display default value, but we must display custom default value, i.e. not 'All Years' but 'Current Year'
+                for (key in DD_ON_LOAD) {
+                    if (DD_ON_LOAD.hasOwnProperty(key)) {
+                        if (value === DD_ON_LOAD[key].resultsMembersID && DD_ON_LOAD[key].resultsMembersID !== DD_ON_LOAD[key].defOptName) {
+                            dimensionArr[index] = DD_ON_LOAD[key].defOptName; // intention is to display default value, but we must display custom default value, i.e. not 'All Years' but 'Current Year'
                         }
                     }
                 }
@@ -1390,7 +1359,7 @@ var scManager = (function(){
                 loadDimensionSelections(cb);
             };
 
-            if (smState.loadFailures.loadDimensionSelections < maxFails){
+            if (smState.loadFailures.loadDimensionSelections < MAX_FAILS){
                 (smState.loadFailures.loadDimensionSelections)++;
                 loadDimensionSelections(cb);
             } else {
@@ -1413,12 +1382,13 @@ var scManager = (function(){
         smState.loadFailures.loadActuals = smState.loadFailures.loadActuals || 0;
 
         onSuccess = function(resultObj) {
-            smState.loadFailures.loadActuals = 0;
             var actuals = resultObj.Results.RowSet.Rows,
                 key,
                 actSect,
                 actTitle,
                 actVal;
+
+            smState.loadFailures.loadActuals = 0;
 
             for (key in actuals) {
                 if (actuals.hasOwnProperty(key)) {
@@ -1433,7 +1403,7 @@ var scManager = (function(){
         };
 
         onFailure = function() {
-            if (smState.loadFailures.loadActuals < maxFails){
+            if (smState.loadFailures.loadActuals < MAX_FAILS){
                 (smState.loadFailures.loadActuals)++;
                 loadActuals(cb);
             } else {
@@ -1457,6 +1427,7 @@ var scManager = (function(){
 
         onSuccess = function(resultObj) {
             var assumptions = resultObj.Results.RowSet.Rows,
+                assSect,
                 assTitle,
                 assVal;
 
@@ -1464,10 +1435,11 @@ var scManager = (function(){
             assumptionsResults = resultObj.Results;
 
             assumptions.forEach(function(item, index){
+                assSect = assumptions[index].ScenarioAssumptionSection;
                 assTitle = assumptions[index].ScenarioAssumption;
                 assTitle = assTitle.replace(' Change Percent', '');
                 assVal = assumptions[index].AnalysisYear;
-                tempArr.push([assTitle, assVal]);
+                tempArr.push([assTitle, assSect, assVal]);
             });
 
             /* TODO: remove
@@ -1484,7 +1456,7 @@ var scManager = (function(){
         };
 
         onFailure = function() {
-            if (smState.loadFailures.loadAssumptions < maxFails){
+            if (smState.loadFailures.loadAssumptions < MAX_FAILS){
                 (smState.loadFailures.loadAssumptions)++;
                 loadAssumptions(cb);
             } else {
@@ -1536,13 +1508,13 @@ var scManager = (function(){
 
         $J('#' + dimNameAsKey).append('<div class="clear-fix hidden" id="' + obj.selectID + '-container"><select name="' + obj.selectID + '" size="1" class="dimensionDD" id="' + obj.selectID + '" dimid="' + dimNameAsKey + '" parid="' + parID + '"></select></div>');
         selectCurrScenario = $J('#' + obj.selectID);
-        setOptText = isDefinedAndTrue(obj.defOptName) ? obj.defOptName : defOptNameChild;
+        setOptText = isDefinedAndTrue(obj.defOptName) ? obj.defOptName : DEF_CHILD_OPT_NAME;
         selectCurrScenario.empty().append('<option value="" selected="selected">' + setOptText + '</option>');
 
         childObj.forEach(function(value) {
             var valueToAdd = isPeriodChildAttr ? value.Attributes[0].Value : value.Name,
                 hasChildren = value.Children,
-                yearOnly = periodYearOnly && obj.resultsMembersID === ddOnLoad.Period.resultsMembersID,
+                yearOnly = periodYearOnly && obj.resultsMembersID === DD_ON_LOAD.Period.resultsMembersID,
                 childObj,
                 selIdOptVal;
 
@@ -1574,15 +1546,15 @@ var scManager = (function(){
     function buildDimensionsDD() {
         var key;
 
-        for (key in ddOnLoad){
-            if (ddOnLoad.hasOwnProperty(key)) {
-                $J('#dimRowLabels').append('<div class="dimRowLabel" dimid="' + formatStringSpace(ddOnLoad[key].webMParamVal1) + '" ddid="' + ddOnLoad[key].selectID + '">' + ddOnLoad[key].defOptName + '</div>');
-                $J('#dimRowDropdowns').append('<div class="clear-fix varSelect" id="' + formatStringSpace(ddOnLoad[key].webMParamVal1) + '"></div>');
+        for (key in DD_ON_LOAD){
+            if (DD_ON_LOAD.hasOwnProperty(key)) {
+                $J('#dimRowLabels').append('<div class="dimRowLabel" dimid="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '" ddid="' + DD_ON_LOAD[key].selectID + '">' + DD_ON_LOAD[key].defOptName + '</div>');
+                $J('#dimRowDropdowns').append('<div class="clear-fix varSelect" id="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '"></div>');
                 smState.DimensionsData[key].Results.Members.forEach(function(value) {
-                    if (value.ID === ddOnLoad.Period.resultsMembersID) { // if this == period, then parse differently
-                        iterateDimChildren(value.Children, ddOnLoad[key], null, true);
-                    } else if (value.ID === ddOnLoad[key].resultsMembersID) {
-                        iterateDimChildren(value.Children, ddOnLoad[key], null, false);
+                    if (value.ID === DD_ON_LOAD.Period.resultsMembersID) { // if this == period, then parse differently
+                        iterateDimChildren(value.Children, DD_ON_LOAD[key], null, true);
+                    } else if (value.ID === DD_ON_LOAD[key].resultsMembersID) {
+                        iterateDimChildren(value.Children, DD_ON_LOAD[key], null, false);
                     }
                 });
             }
@@ -1613,7 +1585,7 @@ var scManager = (function(){
         return returnStr;
     }
 
-    function buildAssumptions(AssumptionsArr) {
+    function buildAssumptions(assumptionsArr) {
         var actualsExist,
             i = 0,
             newSectionTitle,
@@ -1623,29 +1595,32 @@ var scManager = (function(){
             arrAssVal;
 
         actualsExist = $J('#smEntities .actualVal').first().text() !== '' ? $J('#smEntities .actualVal') : null;
+        if (actualsExist){
+            $J('#smEntities').empty();
+        }
 
         newSectionTitle = '';
-        while (i < AssumptionsArr.length) {
-            arrSectionTitle = AssumptionsArr[i][1];
+        while (i < assumptionsArr.length) {
+            arrSectionTitle = assumptionsArr[i][1];
             if (arrSectionTitle !== newSectionTitle) { // if new Section title found, print
                 newSectionTitle = arrSectionTitle;
-                if (arrSectionTitle in displaySectionNames) {
-                    arrSectionTitle = displaySectionNames[arrSectionTitle].displayName;
+                if (arrSectionTitle in DISPLAY_SECTION_NAMES) {
+                    arrSectionTitle = DISPLAY_SECTION_NAMES[arrSectionTitle].displayName;
                 }
                 $J('#smEntities').append('<div class="sectContainer"><p class="sectTitle">+ ' + arrSectionTitle + '</p><table border="0"><thead><tr><th class="varGroupTH">- ' + arrSectionTitle + '</th><th class="varGroupVal">Actual</th><th class="varGroupVal">% Change</th></tr></thead><tbody></tbody></table></div>');
             }
 
             // add rows to Section
             savedActVal = actualsExist ? actualsExist.eq(i).text() : '';
-            arrAssTitle = AssumptionsArr[i][0];
-            arrAssVal = AssumptionsArr[i][1];
+            arrAssTitle = assumptionsArr[i][0];
+            arrAssVal = assumptionsArr[i][2];
 
             $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + arrAssTitle + '</td><td class="actualVal">' + savedActVal + '</td><td class="assumptionVal">' + buildAssumptionDD(arrAssTitle, arrAssVal) + '</td></tr>');
             i++;
         }
     }
 
-    function buildActuals(ActualsArr) {
+    function buildActuals(actualsArr) {
         var assumptionsExist,
             i = 0,
             newSectionTitle,
@@ -1656,21 +1631,24 @@ var scManager = (function(){
             formattedResult;
 
         assumptionsExist = $J('#smEntities .assumptionVal').first().has('select').length ? $J('#smEntities .assumptionVal') : null;
+        if (assumptionsExist){
+            $J('#smEntities').empty();
+        }
 
         newSectionTitle = '';
-        while (i < ActualsArr.length) {
-            arrSectionTitle = ActualsArr[i][1];
+        while (i < actualsArr.length) {
+            arrSectionTitle = actualsArr[i][1];
             if (arrSectionTitle !== newSectionTitle) { // if new Section title found, print
                 newSectionTitle = arrSectionTitle;
-                if (arrSectionTitle in displaySectionNames) {
-                    arrSectionTitle = displaySectionNames[arrSectionTitle].displayName;
+                if (arrSectionTitle in DISPLAY_SECTION_NAMES) {
+                    arrSectionTitle = DISPLAY_SECTION_NAMES[arrSectionTitle].displayName;
                 }
                 $J('#smEntities').append('<div class="sectContainer"><p class="sectTitle">+ ' + arrSectionTitle + '</p><table border="0"><thead><tr><th class="varGroupTH">- ' + arrSectionTitle + '</th><th class="varGroupVal">Actual</th><th class="varGroupVal">% Change</th></tr></thead><tbody></tbody></table></div>');
             }
 
             // add rows to Section
-            arrActTitle = ActualsArr[i][0];
-            arrActVal = ActualsArr[i][2];
+            arrActTitle = actualsArr[i][0];
+            arrActVal = actualsArr[i][2];
             savedAssVal = assumptionsExist ? assumptionsExist.eq(i).html() : '';
 
             formattedResult = formatActualVal(arrActTitle, arrActVal);
@@ -1687,11 +1665,11 @@ var scManager = (function(){
             index = 0,
             thisOption;
 
-        for (key in ddOnLoad){
-            if (ddOnLoad.hasOwnProperty(key)){
-                clearChildSelect(ddOnLoad[key].selectID); // reset dropdowns first
+        for (key in DD_ON_LOAD){
+            if (DD_ON_LOAD.hasOwnProperty(key)){
+                clearChildSelect(DD_ON_LOAD[key].selectID); // reset dropdowns first
                 savedSelectVal = smState.DimensionsSelections[index]; // get saved Option value
-                $J('#' + formatStringSpace(ddOnLoad[key].webMParamVal1)).find('option').each(function() {
+                $J('#' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1)).find('option').each(function() {
                     thisOption = $J(this);
                     if (thisOption.text() === savedSelectVal) {
                         showIndDimSelection(thisOption);
@@ -1790,7 +1768,7 @@ var scManager = (function(){
         var urlParamsObj = {};
 
         smState.smVals.Scenario = scName;
-        urlParamsObj[savedScenarioKey] = smState.smVals.Scenario;
+        urlParamsObj[SAVED_SCENARIO_KEY] = smState.smVals.Scenario;
         addParamsToUrl(urlParamsObj);
         rewriteLinks();
         adjustTabForScenario();
@@ -1883,12 +1861,12 @@ var scManager = (function(){
     function dropdownAndMenuEvents(){
         // disable Assumptions dropdowns if Actual ("default") Scenario selected
         $J('#smEntities').on('click', '.select2-selection', function() {
-            if (smState.smVals.Scenario === defaultScenarioName) {
+            if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
                 modalMsg('erase');
                 modalMsg('error', {
                     msgItem: {
                         title: 'Choose Another Scenario',
-                        message: 'Projections are allowed in Scenarios other than ' + defaultScenarioName + '. Please choose another Scenario to make projections.',
+                        message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
                         spinner: false,
                         confirm: {
                             msg: 'Ok',
@@ -1963,7 +1941,7 @@ var scManager = (function(){
                     // set dimRowOptSelected text to most current selection
                     parentDivID = thisSelect.closest('.varSelect').attr('id');
                     setTo = thisSelectVal === '' ? thisDefaultOpt : thisSelectVal;
-                    if (setTo !== defOptNameChild) {
+                    if (setTo !== DEF_CHILD_OPT_NAME) {
                         $J('.dimRowLabel[dimid="' + parentDivID + '"]').text(setTo);
                     }
 
@@ -2076,17 +2054,18 @@ var scManager = (function(){
         //processingMsg(); // TODO: create processing queue
         expandedSM(false); // set SM width
 
-        if (smState.eventTrigger.pageLoad){ // set Scenario name value in smState and URL
-            if (window.location.search === '') {
-                setScenarioStateAndUrl(defaultScenarioName);
+        if (smState.eventTrigger.pageLoad){
+            if (window.location.search === '') { // set Scenario name value in smState and URL
+                setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
             } else {
                 urlParams = getQueryParams(window.location.search);
-                if (savedScenarioKey in urlParams) {
-                    setScenarioStateAndUrl(urlParams[savedScenarioKey]);
+                if (SAVED_SCENARIO_KEY in urlParams) {
+                    setScenarioStateAndUrl(urlParams[SAVED_SCENARIO_KEY]);
                 } else {
-                    setScenarioStateAndUrl(defaultScenarioName);
+                    setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
                 }
             }
+
         }
 
         for (key in smState.eventRequest.build){ // set up for build of SM components
@@ -2107,6 +2086,7 @@ var scManager = (function(){
                         if (smState.eventRequest.build.Actuals){
                             $J('#smEntities .actualVal').each(function(){
                                 $J(this).empty();
+                                debugger;
                             });
                         }
                         break;
@@ -2159,9 +2139,9 @@ var scManager = (function(){
         //dropdownAndMenuEvents();
         adjustSMPanel(); // adjust height of SM panel
 
-        //TODO: set somewhere else - > setSMStateObj(smStateDefaults);
+        //TODO: set somewhere else - > setSMStateObj(SM_STATE_DEFAULTS);
         //postInitProcessing();
-        //collapseActualsAndAssumptions();
+        collapseActualsAndAssumptions();
 
         // TODO: end to processing queue
         // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
