@@ -16,14 +16,7 @@ var scManager = (function(){
         3. SLAVE - > saveDimensionSelections()
      */
 
-    var EVENT_REQUEST_DEFAULTS = {
-            Scenario: false,
-            Dimensions: false,
-            Actuals: false,
-            Assumptions: false,
-            Charts: false
-        },
-        smState = {
+    var smState = {
             smVals: { // current SM values
                 Scenario: '', // not needed in DD_ON_LOAD
                 Period: '',
@@ -36,24 +29,13 @@ var scManager = (function(){
                 UDC1: '', // a.k.a. FunctionalGroup
                 JobFunction: ''
             },
-            eventTrigger: {}, // what initiated the event
-            eventRequest: {}, // what are we requesting that the SM do
+            eventRequests: {},
             ScenarioNames: [],
             DimensionsData: {},
             singleDimensionDataSuccesses: 0,
             DimensionsSelections: [],
             permitAssembleCharts: true, // permits/prevents assembleCharts from executing
             loadFailures: {} // counts data load attempt failures, keys by function name
-        },
-        SM_STATE_DEFAULTS = {
-            eventTrigger: { // what initiated the event
-                pageLoad: false
-            },
-            eventRequest: { // what are we requesting that the SM do
-                load: EVENT_REQUEST_DEFAULTS,
-                build: EVENT_REQUEST_DEFAULTS,
-                refresh: EVENT_REQUEST_DEFAULTS
-            }
         },
         MAX_FAILS = 3, // user prompted when max is hit
         DEFAULT_SCENARIO_NAME = 'Actual', // value for default option of Scenario dropdown
@@ -221,25 +203,6 @@ var scManager = (function(){
         };
 
     /** Helpers **/
-
-    function setSMStateObj(setToThisObj){
-        var key,
-            key2;
-
-        for (key in SM_STATE_DEFAULTS){
-            if (SM_STATE_DEFAULTS.hasOwnProperty(key)){
-                for (key2 in SM_STATE_DEFAULTS[key]){
-                    if (SM_STATE_DEFAULTS[key].hasOwnProperty(key2)){
-                        if (typeof setToThisObj[key] === 'undefined' || typeof setToThisObj[key][key2] === 'undefined'){
-                            smState[key][key2] = SM_STATE_DEFAULTS[key][key2];
-                        } else {
-                            smState[key][key2] = setToThisObj[key][key2];
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     function modalMsg(msgType, msgItem){
         // msgType(s): 'status', 'success', 'error', 'erase'
@@ -1215,6 +1178,142 @@ var scManager = (function(){
         });*/
     }
 
+    function requestBuilder(event){
+        var tStamp = Date.now(),
+            requestObj = {
+                event: event,
+                stage: 0
+            };
+
+        switch(event){
+            case 'pageLoad':
+                requestObj.subEvents = [
+                    { // stage 0
+                        BeginProcessing: false
+                    },
+                    { // stage 1
+                        SetPageScenario: false
+                    },
+                    { // stage 2
+                        Scenarios: false,
+                        Dimensions: false,
+                        Assumptions: false
+                    },
+                    { // stage 3
+                        DimensionSelections: false,
+                        SmOnPageLoad: false
+                    },
+                    { // stage 4
+                        Charts: false,
+                        Actuals: false
+                    },
+                    { // stage 5
+                        FinishProcessing: false
+                    }
+                ];
+                break;
+            default:
+                consoleLog('eventBuilder', ['The ' + event + 'event does not exist.'], null, 'error');
+        }
+
+        smState.eventRequests[tStamp] = requestObj;
+        return tStamp;
+    }
+
+    function requestRouter(rID, subEv){
+        var urlParams;
+
+        switch(subEv){
+            case 'Actuals':
+                $J('#smEntities .actualVal').each(function(){
+                    $J(this).empty();
+                });
+                loadActuals(buildActuals);
+                break;
+            case 'Assumptions':
+                $J('#smEntities .assumptionVal').each(function(){
+                    $J(this).empty();
+                });
+                loadAssumptions(buildAssumptions);
+                break;
+            case 'BeginProcessing':
+                processingMsg();
+                break;
+            case 'Charts':
+                assembleCharts();
+                break;
+            case 'Dimensions':
+                $J('#dimRowLabels').empty();
+                $J('#dimRowDropdowns').empty();
+                loadDimensionsData(buildDimensionsDD);
+                break;
+            case 'DimensionSelections':
+                loadDimensionSelections(showDimensionSelections);
+                break;
+            case 'FinishProcessing':
+                modalMsg('erase'); // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
+                break;
+            case 'SetPageScenario':
+                expandedSM(false); // set SM width
+                if (window.location.search === '') { // set Scenario name value in smState and URL
+                    setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
+                } else {
+                    urlParams = getQueryParams(window.location.search);
+                    if (SAVED_SCENARIO_KEY in urlParams) {
+                        setScenarioStateAndUrl(urlParams[SAVED_SCENARIO_KEY]);
+                    } else {
+                        setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
+                    }
+                }
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'Scenarios':
+                $J('#curScenarioSel').empty();
+                loadCurrScenarioData(buildCurrScenarioDD);
+                break;
+            case 'SmOnPageLoad':
+                applySelect2(['scenario', 'dimensions', 'assumptions']);
+                sectionScenariosEvents();
+                dropdownAndMenuEvents();
+                adjustSMPanel(); // adjust height of SM panel
+                collapseActualsAndAssumptions();
+                postRequestProcessor(rID, subEv);
+                break;
+            default:
+                consoleLog('requestRouter', ['The ' + subEv + 'event does not exist.'], null, 'error');
+        }
+    }
+
+    function postRequestProcessor(rID, subEv){
+        var eventObj = smState.eventRequests[rID],
+            eventsCompleted = 0;
+
+        smState.eventRequests[rID][subEv] = true;
+
+        for (var anEvent in eventObj.subEvents[eventObj.stage]){
+            if (eventObj.subEvents[eventObj.stage].hasOwnProperty(anEvent)){
+                if (eventObj.subEvents[eventObj.stage][anEvent] === true){
+                    eventsCompleted++;
+                }
+            }
+        }
+
+        if (eventsCompleted === Object.keys(eventObj.subEvents[eventObj.stage]).length){
+            eventObj.stage = (eventObj.stage)++;
+            requestHandler(rID);
+        }
+    }
+
+    function requestHandler(rID){
+        var eventObj = smState.eventRequests[rID];
+
+        for (var anEvent in eventObj.subEvents[eventObj.stage]){
+            if (eventObj.subEvents[eventObj.stage].hasOwnProperty(anEvent)){
+                requestRouter(rID, anEvent);
+            }
+        }
+    }
+
     /** Data Loads **/
 
     function loadCurrScenarioData(cb) {
@@ -2043,109 +2142,9 @@ var scManager = (function(){
 
     /** Ante Up **/
 
-    function init(stateObj){
-        var key,
-            urlParams;
-
-        //preInitProcessing();
-
-        setSMStateObj(stateObj);
-
-        //processingMsg(); // TODO: create processing queue
-        expandedSM(false); // set SM width
-
-        if (smState.eventTrigger.pageLoad){
-            if (window.location.search === '') { // set Scenario name value in smState and URL
-                setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
-            } else {
-                urlParams = getQueryParams(window.location.search);
-                if (SAVED_SCENARIO_KEY in urlParams) {
-                    setScenarioStateAndUrl(urlParams[SAVED_SCENARIO_KEY]);
-                } else {
-                    setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
-                }
-            }
-
-        }
-
-        for (key in smState.eventRequest.build){ // set up for build of SM components
-            if (smState.eventRequest.build.hasOwnProperty(key)){
-                switch (key){
-                    case 'Scenario':
-                        if (smState.eventRequest.build.Scenario){
-                            $J('#curScenarioSel').empty();
-                        }
-                        break;
-                    case 'Dimensions':
-                        if (smState.eventRequest.build.Dimensions){
-                            $J('#dimRowLabels').empty();
-                            $J('#dimRowDropdowns').empty();
-                        }
-                        break;
-                    case 'Actuals':
-                        if (smState.eventRequest.build.Actuals){
-                            $J('#smEntities .actualVal').each(function(){
-                                $J(this).empty();
-                                debugger;
-                            });
-                        }
-                        break;
-                    case 'Assumptions':
-                        if (smState.eventRequest.build.Assumptions){
-                            $J('#smEntities .assumptionVal').each(function(){
-                                $J(this).empty();
-                            });
-                        }
-                        break;
-                    default:
-                        consoleLog('init', ['Trying to build "' + key + '", a component that does not exist.'], null, 'error');
-                }
-            }
-        }
-
-        for (key in smState.eventRequest.load){ // load SM data
-            if (smState.eventRequest.load.hasOwnProperty(key)){
-                switch (key){
-                    case 'Scenario':
-                        if (smState.eventRequest.load.Scenario){
-                            loadCurrScenarioData(buildCurrScenarioDD);
-                        }
-                        break;
-                    case 'Dimensions':
-                        if (smState.eventRequest.load.Dimensions){
-                            loadDimensionsData(buildDimensionsDD);
-                            loadDimensionSelections(showDimensionSelections);
-                        }
-                        break;
-                    case 'Actuals':
-                        if (smState.eventRequest.load.Actuals){
-                            loadActuals(buildActuals);
-                        }
-                        break;
-                    case 'Assumptions':
-                        if (smState.eventRequest.load.Assumptions){
-                            loadAssumptions(buildAssumptions);
-                        }
-                        break;
-                    default:
-                        consoleLog('init', ['Trying to load "' + key + '", this data does not exist.'], null, 'error');
-                }
-            }
-        }
-
-        assembleCharts();
-        applySelect2(['scenario', 'dimensions', 'assumptions']); // add Select2 functionality to dropdowns
-        sectionScenariosEvents(); // set SM event listeners
-        //dropdownAndMenuEvents();
-        adjustSMPanel(); // adjust height of SM panel
-
-        //TODO: set somewhere else - > setSMStateObj(SM_STATE_DEFAULTS);
-        //postInitProcessing();
-        collapseActualsAndAssumptions();
-
-        // TODO: end to processing queue
-        // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
-        // modalMsg('erase');
+    function init(event){
+        var requestID = requestBuilder(event);
+        requestHandler(requestID);
     }
 
     return {
@@ -2155,22 +2154,4 @@ var scManager = (function(){
     };
 })();
 
-scManager.smInit({
-    eventTrigger: {
-        pageLoad: true
-    },
-    eventRequest: {
-        load: {
-            Scenario: true,
-            Dimensions: true,
-            Actuals: true,
-            Assumptions: true
-        },
-        build: {
-            Scenario: true,
-            Dimensions: true,
-            Actuals: true,
-            Assumptions: true
-        }
-    }
-});
+scManager.smInit('pageLoad');
