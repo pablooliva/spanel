@@ -34,7 +34,6 @@ var scManager = (function(){
             DimensionsData: {},
             singleDimensionDataSuccesses: 0,
             DimensionsSelections: [],
-            permitAssembleCharts: true, // permits/prevents assembleCharts from executing
             loadFailures: {} // counts data load attempt failures, keys by function name
         },
         MAX_FAILS = 3, // user prompted when max is hit
@@ -441,6 +440,17 @@ var scManager = (function(){
         });
     }
 
+    function setScenarioStateAndUrl(scName){
+        var urlParamsObj = {};
+
+        /* TODO: create setter and getter methods for smState */
+        smState.smVals.Scenario = scName;
+        urlParamsObj[SAVED_SCENARIO_KEY] = smState.smVals.Scenario;
+        addParamsToUrl(urlParamsObj);
+        rewriteLinks();
+        adjustTabForScenario();
+    }
+
     function formatStringSpace(thisStr) {
         // removes whitespace
         return thisStr.replace(/\s+/g, '');
@@ -456,9 +466,6 @@ var scManager = (function(){
             obj,
             thisSel;
 
-        // TODO: review this
-        permitAssembleCharts = false;
-
         // clears select with idToClear and children selects
         for (key in dependSelects) {
             if (dependSelects.hasOwnProperty(key)) {
@@ -472,9 +479,6 @@ var scManager = (function(){
                 }
             }
         }
-
-        // TODO: review this
-        permitAssembleCharts = true;
     }
 
     function updateRunningTab(selDimid, txt) {
@@ -833,12 +837,12 @@ var scManager = (function(){
         es.get("TM1SubsetMembers", params, onSuccess, onFailure, true);
     }
 
-    function createNewScenario(newScenarioNameStr, cb, requestID, subEvent) {
-        var params = { "p_element": newScenarioNameStr }, // web method: ScenarioElementInsert?p_element=newScenarioNameStr
+    function createNewScenario(exObject, cb, requestID, subEvent) {
+        var params = { "p_element": exObject.ScenarioName }, // web method: ScenarioElementInsert?p_element=newScenarioNameStr
             failureMessage,
             onSuccess,
             onFailure,
-            newParamsObj;
+            newParamsObj = {};
 
         smState.loadFailures.createNewScenario = smState.loadFailures.createNewScenario || 0;
 
@@ -855,12 +859,12 @@ var scManager = (function(){
 
         failureMessage = function(){
             var recursiveCall = function(){
-                createNewScenario(newScenarioNameStr);
+                createNewScenario(exObject, cb, requestID, subEvent);
             };
 
             if (smState.loadFailures.createNewScenario < MAX_FAILS){
                 (smState.loadFailures.createNewScenario)++;
-                createNewScenario(newScenarioNameStr);
+                createNewScenario(exObject, cb, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -885,14 +889,14 @@ var scManager = (function(){
             };
 
             smState.loadFailures.createNewScenario = 0;
-            newParamsObj[SAVED_SCENARIO_KEY] = newScenarioNameStr;
+            newParamsObj[SAVED_SCENARIO_KEY] = exObject.ScenarioName;
             addParamsToUrl(newParamsObj);
 
             modalMsg('erase');
             modalMsg('success', {
                 msgItem: {
                     title: 'Success',
-                    message: 'Scenario "' + newScenarioNameStr + '" was created.',
+                    message: 'Scenario "' + exObject.ScenarioName + '" was created.',
                     spinner: false,
                     confirm: {
                         msg: 'Ok',
@@ -908,7 +912,7 @@ var scManager = (function(){
         es.get("ScenarioElementInsert", params, onSuccess, onFailure, true, "json", 120000, "There is still no response from the server. Do you want to abort the request?", 120000);
     }
 
-    function isScenarioNameUnique(nameToCheck, cb, cb2, requestID, subEvent){
+    function isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent){
         var params = { "DimName": "Scenario" }, // web method: TM1DimensionMembers?DimName=Scenario
             testPassed = true,
             failureMessage,
@@ -919,12 +923,12 @@ var scManager = (function(){
 
         failureMessage = function(){
             var recursiveCall = function(){
-                isScenarioNameUnique(nameToCheck, cb);
+                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
             };
 
             if (smState.loadFailures.isScenarioNameUnique < MAX_FAILS){
                 (smState.loadFailures.isScenarioNameUnique)++;
-                isScenarioNameUnique(nameToCheck, cb);
+                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -946,7 +950,7 @@ var scManager = (function(){
         onSuccess = function(resultObj) {
             smState.loadFailures.isScenarioNameUnique = 0;
             resultObj.Results.Members.forEach(function(value) {
-                if (value.Name === nameToCheck) {
+                if (value.Name === exObject.ScenarioName) {
                     modalMsg('erase');
                     modalMsg('error', {
                         msgItem: {
@@ -965,7 +969,7 @@ var scManager = (function(){
             });
 
             if (testPassed){
-                cb(nameToCheck, cb2, requestID, subEvent);
+                cb(exObject, cb2, requestID, subEvent);
             }
         };
 
@@ -978,7 +982,7 @@ var scManager = (function(){
         var params  = { "DimName": "Scenario", "MemberID": smState.smVals.Scenario }, // web method: TM1DimensionDeleteMember?DimName=Scenario&MemberID=Test
             onSuccess,
             onFailure,
-            newParamsObj;
+            newParamsObj = {};
 
         modalMsg('erase');
         modalMsg('status', {
@@ -1070,6 +1074,48 @@ var scManager = (function(){
                 }
             }
         });
+    }
+
+    function selectScenario(exObject){
+        var newParamsObj = {};
+
+        newParamsObj[SAVED_SCENARIO_KEY] = exObject.thisSelectVal;
+        addParamsToUrl(newParamsObj);
+    }
+
+    function selectDimension(exObject){
+        var parentDivID,
+            setTo,
+            formattedVal,
+            hasChildSel;
+
+        // if current select has an option previously selected, clear children of previous option
+        if (exObject.thisSelectID in wasSelectedVal) {
+            clearChildSelect(wasSelectedVal[exObject.thisSelectID]);
+        }
+
+        // set dimRowOptSelected text to most current selection
+        parentDivID = exObject.thisSelect.closest('.varSelect').attr('id');
+        setTo = exObject.thisSelectVal === '' ? exObject.thisDefaultOpt : exObject.thisSelectVal;
+        if (setTo !== DEF_CHILD_OPT_NAME) {
+            $J('.dimRowLabel[dimid="' + parentDivID + '"]').text(setTo);
+        }
+
+        // check to see if this select has any dependencies, display child
+        formattedVal = isDefinedAndTrue(exObject.thisSelectVal) ? formatStringChars(exObject.thisSelectVal) : exObject.thisSelectVal;
+        hasChildSel = exObject.thisSelectID + formattedVal + '-container';
+        if ($J('#' + hasChildSel).length) {
+            $J('#' + hasChildSel).removeClass('hidden');
+        }
+
+        repositionVarSelect(parentDivID);
+
+        // reset wasSelectedVal
+        for (var key in wasSelectedVal) {
+            if (wasSelectedVal.hasOwnProperty(key)) {
+                delete wasSelectedVal[key];
+            }
+        }
     }
 
     function saveDimensionSelections() {
@@ -1167,7 +1213,7 @@ var scManager = (function(){
         });
     }
 
-    function saveAssumptions() {
+    function saveAssumptions(cb, requestID, subEvent) {
         var saveToCompany = 'unassigned',
             view,
             resultsRows,
@@ -1177,79 +1223,59 @@ var scManager = (function(){
             onSuccess,
             onFailure;
 
-        if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
-            modalMsg('erase');
-            modalMsg('error', {
-                msgItem: {
-                    title: 'Sorry!',
-                    message: 'You can not save to the default Scenario that is currently selected. Please choose another Scenario.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Try Again',
-                        funcs: []
-                    },
-                    deny: {}
-                }
+        processingMsg();
+
+        if (smState.smVals.Scenario !== DEFAULT_SCENARIO_NAME) {
+            // set to var set in getAssumptions()
+            view = assumptionsResults;
+            view.TitleDimensions.Scenario.ID = smState.smVals.Scenario;
+            view.TitleDimensions.Scenario.Name = smState.smVals.Scenario;
+            view.TitleDimensions.Company.ID = saveToCompany;
+            view.TitleDimensions.Company.Name = saveToCompany;
+            resultsRows = view.RowSet.Rows;
+
+            // get Assumptions vals from SM
+            $J('.varPercent').each(function() {
+                assumptionsDDVals.push($J(this).val());
             });
-            return;
-        }
 
-        // set to var set in getAssumptions()
-        view = assumptionsResults;
-        view.TitleDimensions.Scenario.ID = smState.smVals.Scenario;
-        view.TitleDimensions.Scenario.Name = smState.smVals.Scenario;
-        view.TitleDimensions.Company.ID = saveToCompany;
-        view.TitleDimensions.Company.Name = saveToCompany;
-        resultsRows = view.RowSet.Rows;
-
-        // get Assumptions vals from SM
-        $J('.varPercent').each(function() {
-            assumptionsDDVals.push($J(this).val());
-        });
-
-        // set Assumptions vals in object before post
-        for (key in resultsRows) {
-            if (resultsRows.hasOwnProperty(key)) {
-                resultsRows[key].AnalysisYear = assumptionsDDVals[count] / 100;
-                count++;
+            // set Assumptions vals in object before post
+            for (key in resultsRows) {
+                if (resultsRows.hasOwnProperty(key)) {
+                    resultsRows[key].AnalysisYear = assumptionsDDVals[count] / 100;
+                    count++;
+                }
             }
-        }
-        view.RowSet.Rows = resultsRows;
+            view.RowSet.Rows = resultsRows;
 
-        smState.loadFailures.saveAssumptions = smState.loadFailures.saveAssumptions || 0;
+            smState.loadFailures.saveAssumptions = smState.loadFailures.saveAssumptions || 0;
 
-        onSuccess = function() {
-            smState.loadFailures.saveAssumptions = 0;
-        };
-
-        onFailure = function() {
-            if (smState.loadFailures.saveAssumptions < MAX_FAILS){
-                (smState.loadFailures.saveAssumptions)++;
-                saveAssumptions();
-            } else {
-                modalMsg('erase');
-                failedToUpdateMsg('The assumptions/projection change just made ', [saveDimensionSelections, processingMsg]);
+            onSuccess = function() {
                 smState.loadFailures.saveAssumptions = 0;
-            }
-        };
+                modalMsg('erase');
+                cb(requestID, subEvent);
+            };
 
-        $J.ajax({
-            type: "POST",
-            data: JSON.stringify(view),
-            cache: false,
-            url: es3 + "json/TM1ViewWrite",
-            error: onFailure,
-            success: onSuccess
-        });
-    }
+            onFailure = function() {
+                if (smState.loadFailures.saveAssumptions < MAX_FAILS){
+                    (smState.loadFailures.saveAssumptions)++;
+                    saveAssumptions();
+                } else {
+                    modalMsg('erase');
+                    failedToUpdateMsg('The assumptions/projection change just made ', [saveAssumptions]);
+                    smState.loadFailures.saveAssumptions = 0;
+                }
+            };
 
-    function reprintActuals() {
-        loadActuals();
-        /* TODO: fix this! */
-        /*$J('.actualVal').each(function(index) {
-            var formattedVal = formatActualVal(smState.actualsArr[index][0], smState.actualsArr[index][2]);
-            $J(this).html(formattedVal[1]);
-        });*/
+            $J.ajax({
+                type: "POST",
+                data: JSON.stringify(view),
+                cache: false,
+                url: es3 + "json/TM1ViewWrite",
+                error: onFailure,
+                success: onSuccess
+            });
+        }
     }
 
     function requestBuilder(event){
@@ -1329,6 +1355,63 @@ var scManager = (function(){
                     }
                 ];
                 break;
+            case 'selectScenario':
+                requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
+                    {
+                        SelectScenario: false
+                    },
+                    {
+                        SetPageScenario: false
+                    },
+                    {
+                        DimensionSelections: false,
+                        Assumptions: false
+                    },
+                    {
+                        Charts: false,
+                        Actuals: false
+                    },
+                    {
+                        FinishProcessing: false
+                    }
+                ];
+                break;
+            case 'selectDimension':
+                requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
+                    {
+                        SelectDimension: false
+                    },
+                    {
+                        Charts: false,
+                        Actuals: false
+                    },
+                    {
+                        FinishProcessing: false
+                    }
+                ];
+                break;
+            case 'selectAssumption':
+                requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
+                    {
+                        SelectAssumption: false
+                    },
+                    {
+                        Charts: false
+                    },
+                    {
+                        FinishProcessing: false
+                    }
+                ];
+                break;
             default:
                 consoleLog('requestBuilder', ['The ' + event + 'event does not exist.'], null, 'error');
         }
@@ -1337,15 +1420,22 @@ var scManager = (function(){
         return tStamp;
     }
 
-    function requestRouter(rID, subEv){
+    function requestRouter(rID, subEv, extrasObj){
         var urlParams;
+
+        /**
+        When a function uses async processes, then we need to use a
+         callback function to call postRequestProcessor.
+        Otherwise, postRequestProcessor can be called inline below
+         within each case.
+         **/
 
         switch(subEv){
             case 'Actuals':
                 $J('#smEntities .actualVal').each(function(){
                     $J(this).empty();
                 });
-                loadActuals(buildActuals);
+                loadActuals(buildActuals, postRequestProcessor, rID, subEv);
                 break;
             case 'AdjustSM':
                 expandedSM(false); // set SM width
@@ -1355,17 +1445,19 @@ var scManager = (function(){
                 $J('#smEntities .assumptionVal').each(function(){
                     $J(this).empty();
                 });
-                loadAssumptions(buildAssumptions);
+                loadAssumptions(buildAssumptions, postRequestProcessor, rID, subEv);
                 break;
             case 'BeginProcessing':
                 modalMsg('erase');
                 processingMsg();
+                postRequestProcessor(rID, subEv);
                 break;
             case 'Charts':
                 assembleCharts();
+                postRequestProcessor(rID, subEv);
                 break;
             case 'CreateScenario':
-                isScenarioNameUnique($J('#create-scenario-name').val(), createNewScenario, postRequestProcessor, rID, subEv);
+                isScenarioNameUnique(extrasObj, createNewScenario, postRequestProcessor, rID, subEv);
                 break;
             case 'DeleteScenario':
                 deleteScenario(postRequestProcessor, rID, subEv);
@@ -1373,13 +1465,25 @@ var scManager = (function(){
             case 'Dimensions':
                 $J('#dimRowLabels').empty();
                 $J('#dimRowDropdowns').empty();
-                loadDimensionsData(buildDimensionsDD);
+                loadDimensionsData(buildDimensionsDD, postRequestProcessor, rID, subEv);
                 break;
             case 'DimensionSelections':
-                loadDimensionSelections(showDimensionSelections);
+                loadDimensionSelections(showDimensionSelections, postRequestProcessor, rID, subEv);
                 break;
             case 'FinishProcessing':
                 modalMsg('erase'); // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'SelectAssumption':
+                saveAssumptions(postRequestProcessor, rID, subEv);
+                break;
+            case 'SelectDimension':
+                selectDimension(extrasObj);
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'SelectScenario':
+                selectScenario(extrasObj, postRequestProcessor, rID, subEv);
+                postRequestProcessor(rID, subEv);
                 break;
             case 'SetPageScenario':
                 if (window.location.search === '') {
@@ -1396,7 +1500,7 @@ var scManager = (function(){
                 break;
             case 'Scenarios':
                 $J('#curScenarioSel').empty();
-                loadCurrScenarioData(buildCurrScenarioDD);
+                loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
                 break;
             case 'SmOnPageLoad':
                 applySelect2(['scenario', 'dimensions', 'assumptions']);
@@ -1436,12 +1540,12 @@ var scManager = (function(){
         }
     }
 
-    function requestHandler(rID){
+    function requestHandler(rID, eObj){
         var eventObj = smState.eventRequests[rID];
 
         for (var anEvent in eventObj.subEvents[eventObj.stage]){
             if (eventObj.subEvents[eventObj.stage].hasOwnProperty(anEvent)){
-                requestRouter(rID, anEvent);
+                requestRouter(rID, anEvent, eObj);
             }
         }
     }
@@ -1452,7 +1556,7 @@ var scManager = (function(){
 
     /** Data Loads **/
 
-    function loadCurrScenarioData(cb) {
+    function loadCurrScenarioData(cb, cb2, requestID, subEvent) {
         var params = { "DimName": "Scenario"}, // web method: TM1DimensionMembers?DimName=Scenario
             webMethod = 'TM1DimensionMembers',
             savedScenarioNames = [],
@@ -1468,17 +1572,17 @@ var scManager = (function(){
             });
             savedScenarioNames.sort();
             smState.ScenarioNames = savedScenarioNames;
-            cb();
+            cb(cb2, requestID, subEvent);
         };
 
         onFailure = function() {
             var recursiveCall = function(){
-                loadCurrScenarioData(cb);
+                loadCurrScenarioData(cb, cb2, requestID, subEvent);
             };
 
             if (smState.loadFailures.loadCurrScenarioData < MAX_FAILS){
                 (smState.loadFailures.loadCurrScenarioData)++;
-                loadCurrScenarioData(cb);
+                loadCurrScenarioData(cb, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 failedToUpdateMsg('The "Current Scenario" drop down', [recursiveCall]);
@@ -1489,7 +1593,7 @@ var scManager = (function(){
         es.get(webMethod, params, onSuccess, onFailure, true);
     }
 
-    function loadSingleDimensionData(cb, method, parameters){
+    function loadSingleDimensionData(cb, method, parameters, cb2, requestID, subEvent){
         var formattedName = formatStringSpace(parameters.DimName),
             failureName = 'dimension' + formattedName,
             onSuccess,
@@ -1505,18 +1609,18 @@ var scManager = (function(){
             (smState.singleDimensionDataSuccesses)++;
             if (smState.singleDimensionDataSuccesses === Object.keys(DD_ON_LOAD).length){
                 smState.singleDimensionDataSuccesses = 0;
-                cb();
+                cb(cb2, requestID, subEvent);
             }
         };
 
         onFailure = function() {
             var recursiveCall = function(){
-                    loadSingleDimensionData(cb, method, parameters);
+                    loadSingleDimensionData(cb, method, parameters, cb2, requestID, subEvent);
                 };
 
             if (smState.loadFailures[failureName] < MAX_FAILS){
                 (smState.loadFailures[failureName])++;
-                loadSingleDimensionData(cb, method, parameters);
+                loadSingleDimensionData(cb, method, parameters, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 failedToUpdateMsg('The ' + parameters.DimName + ' drop down', [recursiveCall]);
@@ -1528,7 +1632,7 @@ var scManager = (function(){
         es.get(method, parameters, onSuccess, onFailure, false);
     }
 
-    function loadDimensionsData(cb) {
+    function loadDimensionsData(cb, cb2, requestID, subEvent) {
         var key,
             params = {};
 
@@ -1544,12 +1648,12 @@ var scManager = (function(){
                 if (DD_ON_LOAD[key].webMParamKey2) {
                     params[DD_ON_LOAD[key].webMParamKey2] = DD_ON_LOAD[key].webMParamVal2;
                 }
-                loadSingleDimensionData(cb, DD_ON_LOAD[key].methodName, params);
+                loadSingleDimensionData(cb, DD_ON_LOAD[key].methodName, params, cb2, requestID, subEvent);
             }
         }
     }
 
-    function loadDimensionSelections(cb) {
+    function loadDimensionSelections(cb, cb2, requestID, subEvent) {
         var params = {},
             webMethod = "ScenarioManager", // web method: ScenarioManager?Scenario=Actual
             onSuccess,
@@ -1586,17 +1690,17 @@ var scManager = (function(){
                 }
             });
             smState.DimensionsSelections = dimensionArr;
-            cb();
+            cb(cb2, requestID, subEvent);
         };
 
         onFailure = function() {
             var recursiveCall = function(){
-                loadDimensionSelections(cb);
+                loadDimensionSelections(cb, cb2, requestID, subEvent);
             };
 
             if (smState.loadFailures.loadDimensionSelections < MAX_FAILS){
                 (smState.loadFailures.loadDimensionSelections)++;
-                loadDimensionSelections(cb);
+                loadDimensionSelections(cb, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 failedToUpdateMsg('Some of the data', [recursiveCall]);
@@ -1608,7 +1712,7 @@ var scManager = (function(){
         es.get(webMethod, params, onSuccess, onFailure, false);
     }
 
-    function loadActuals(cb) {
+    function loadActuals(cb, cb2, requestID, subEvent) {
         var webMethod = "ScenarioManagerActuals", // web method: ScenarioManagerActuals
             tempArr = [],
             onSuccess,
@@ -1634,16 +1738,20 @@ var scManager = (function(){
                     tempArr.push([actTitle, actSect, actVal]);
                 }
             }
-            cb(tempArr);
+            cb(tempArr, cb2, requestID, subEvent);
         };
 
         onFailure = function() {
+            var tryAgain = function(){
+                loadActuals(cb, cb2, requestID, subEvent);
+            };
+
             if (smState.loadFailures.loadActuals < MAX_FAILS){
                 (smState.loadFailures.loadActuals)++;
-                loadActuals(cb);
+                loadActuals(cb, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
-                failedToUpdateMsg('The actual/current data', [loadActuals]);
+                failedToUpdateMsg('The actual/current data', [tryAgain]);
                 smState.loadFailures.loadActuals = 0;
             }
         };
@@ -1651,7 +1759,7 @@ var scManager = (function(){
         es.get(webMethod, smState.smVals, onSuccess, onFailure, true);
     }
 
-    function loadAssumptions(cb) {
+    function loadAssumptions(cb, cb2, requestID, subEvent) {
         var webMethod = "ScenarioAssumptionsChange", // web method: ScenarioAssumptionsChange
             params = {},
             tempArr = [],
@@ -1687,16 +1795,20 @@ var scManager = (function(){
                 }
             }*/
 
-            cb(tempArr);
+            cb(tempArr, cb2, requestID, subEvent);
         };
 
         onFailure = function() {
+            var tryAgain = function(){
+                loadAssumptions(cb, cb2, requestID, subEvent)
+            };
+
             if (smState.loadFailures.loadAssumptions < MAX_FAILS){
                 (smState.loadFailures.loadAssumptions)++;
-                loadAssumptions(cb);
+                loadAssumptions(cb, cb2, requestID, subEvent)
             } else {
                 modalMsg('erase');
-                failedToUpdateMsg('The projection/assumption data', [loadAssumptions]);
+                failedToUpdateMsg('The projection/assumption data', [tryAgain]);
                 smState.loadFailures.loadAssumptions = 0;
             }
 
@@ -1708,7 +1820,7 @@ var scManager = (function(){
 
     /** Build Components **/
 
-    function buildCurrScenarioDD() {
+    function buildCurrScenarioDD(cb, requestID, subEvent) {
         var selectCurrScenario = $J('#curScenarioSel'),
             optionStr = '',
             selectedValue;
@@ -1728,6 +1840,8 @@ var scManager = (function(){
             selectCurrScenario.val(selectedValue).trigger('change', selectedValue);
             selectCurrScenario.next().find('.select2-selection__rendered').text(selectedValue);
         }
+
+        cb(requestID, subEvent);
     }
 
     function iterateDimChildren(childObj, obj, aParID, isPeriodChildAttr) {
@@ -1778,7 +1892,7 @@ var scManager = (function(){
         }
     }
 
-    function buildDimensionsDD() {
+    function buildDimensionsDD(cb, requestID, subEvent) {
         var key;
 
         for (key in DD_ON_LOAD){
@@ -1794,6 +1908,8 @@ var scManager = (function(){
                 });
             }
         }
+
+        cb(requestID, subEvent);
     }
 
     function buildAssumptionDD(actTitle, assVal) {
@@ -1820,7 +1936,7 @@ var scManager = (function(){
         return returnStr;
     }
 
-    function buildAssumptions(assumptionsArr) {
+    function buildAssumptions(assumptionsArr, cb, requestID, subEvent) {
         var actualsExist,
             i = 0,
             newSectionTitle,
@@ -1853,9 +1969,11 @@ var scManager = (function(){
             $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + arrAssTitle + '</td><td class="actualVal">' + savedActVal + '</td><td class="assumptionVal">' + buildAssumptionDD(arrAssTitle, arrAssVal) + '</td></tr>');
             i++;
         }
+
+        cb(requestID, subEvent);
     }
 
-    function buildActuals(actualsArr) {
+    function buildActuals(actualsArr, cb, requestID, subEvent) {
         var assumptionsExist,
             i = 0,
             newSectionTitle,
@@ -1890,11 +2008,13 @@ var scManager = (function(){
             $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + formattedResult[0] + '</td><td class="actualVal">' + formattedResult[1] + '</td><td class="assumptionVal">' + savedAssVal + '</td></tr>');
             i++;
         }
+
+        cb(requestID, subEvent);
     }
 
     /** Set & Display Components **/
 
-    function showDimensionSelections() {
+    function showDimensionSelections(cb, requestID, subEvent) {
         var key,
             savedSelectVal,
             index = 0,
@@ -1913,6 +2033,8 @@ var scManager = (function(){
                 index++;
             }
         }
+
+        cb(requestID, subEvent);
     }
 
     function showIndDimSelection(selectedOption) {
@@ -1944,16 +2066,12 @@ var scManager = (function(){
             curSelectOpt.removeAttr('selected'); // clear current "selected"
             selectedOption.attr('selected', 'selected'); // set new "selected" option
 
-            // permitAssembleCharts = false;
-
             // trigger change so that it registers with select2
             thisClosestSelect.val(selectedOption.text()).trigger('change', selectedOption.text());
             thisClosestSelect.next().find('.select2-selection__rendered').text(selectedOption.text());
         }
         containerDivID = thisClosestSelect.attr('id');
         $J('#' + containerDivID + '-container').removeClass('hidden'); // show container div
-
-        // permitAssembleCharts = true;
     }
 
     function collapseActualsAndAssumptions() {
@@ -1999,17 +2117,6 @@ var scManager = (function(){
         }
     }
 
-    function setScenarioStateAndUrl(scName){
-        var urlParamsObj = {};
-
-        /* TODO: create setter and getter methods for smState */
-        smState.smVals.Scenario = scName;
-        urlParamsObj[SAVED_SCENARIO_KEY] = smState.smVals.Scenario;
-        addParamsToUrl(urlParamsObj);
-        rewriteLinks();
-        adjustTabForScenario();
-    }
-
     function adjustSMPanel(){
         $J(window).scroll(function() {
             var bodyHeight = $J('#body').height();
@@ -2030,7 +2137,8 @@ var scManager = (function(){
     function sectionScenariosEvents() {
         var nameInput,
             defVal = '',
-            errorVal = 'Please enter a name';
+            errorVal = 'Please enter a name',
+            extrasObj = {};
 
         // *** Current Scenario ***
         // ************************
@@ -2063,7 +2171,8 @@ var scManager = (function(){
                 nameInput.val(errorVal).css('color', 'red');
             }
             else {
-                init('createScenario');
+                extrasObj.ScenarioName = nameInput.val();
+                init('createScenario', extrasObj);
             }
         });
 
@@ -2081,24 +2190,11 @@ var scManager = (function(){
     }
 
     function dropdownAndMenuEvents(){
-        // disable Assumptions dropdowns if Actual ("default") Scenario selected
+        /* TODO: delete */
+        /* // disable Assumptions dropdowns if Actual ("default") Scenario selected
         $J('#smEntities').on('click', '.select2-selection', function() {
-            if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
-                modalMsg('erase');
-                modalMsg('error', {
-                    msgItem: {
-                        title: 'Choose Another Scenario',
-                        message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
-                        spinner: false,
-                        confirm: {
-                            msg: 'Ok',
-                            funcs: []
-                        },
-                        deny: {}
-                    }
-                });
-            }
-        });
+        moved to MAIN below
+        }) */
 
         // save currently selected sub-select value if sub-select is active
         $J('#smFilters').on('click', '.select2-selection__rendered', function() {
@@ -2120,97 +2216,42 @@ var scManager = (function(){
                 thisSelectVal = isDefinedAndTrue(selectVal) ? selectVal : thisSelect.val(),
                 thisSelectID = thisSelect.attr('id'),
                 thisDefaultOpt = thisSelect.find('option:first').text(),
-                permitReprintActuals = false; // TODO: how can this be improved
+                extrasObj = {};
 
-            processingMsg();
-
-            // ************************************
-            // *** case: Scenario select change ***
-            // ************************************
-
+            /** Case: Scenario select change **/
             if (thisSelectID === "curScenarioSel") {
-                setScenarioStateAndUrl(thisSelectVal);
-
-                // empty SM components
-                $J('#smEntities').empty();
-
-                // re-set Dimension dropdowns
-                loadDimensionSelections(showDimensionSelections);
-
-                // reload Actuals and Assumtions dropdowns
-                loadActualsAndAssumptions();
-                collapseActualsAndAssumptions();
-
-                applySelect2(['assumptions']);
+                extrasObj.thisSelectVal = thisSelectVal;
+                init('selectScenario', extrasObj);
             }
             else {
-
-                // ***************************************
-                // *** case: Dimensions selects change ***
-                // ***************************************
-
+                /** Case: Dimensions selects change **/
                 if (thisSelect.closest('section').attr('id') === 'smFilters') {
-                    var parentDivID,
-                        setTo,
-                        formattedVal,
-                        hasChildSel;
-
-                    // if current select has an option previously selected, clear children of previous option
-                    if (thisSelectID in wasSelectedVal) {
-                        clearChildSelect(wasSelectedVal[thisSelectID]);
-                    }
-
-                    // set dimRowOptSelected text to most current selection
-                    parentDivID = thisSelect.closest('.varSelect').attr('id');
-                    setTo = thisSelectVal === '' ? thisDefaultOpt : thisSelectVal;
-                    if (setTo !== DEF_CHILD_OPT_NAME) {
-                        $J('.dimRowLabel[dimid="' + parentDivID + '"]').text(setTo);
-                    }
-
-                    // check to see if this select has any dependencies, display child
-                    formattedVal = isDefinedAndTrue(thisSelectVal) ? formatStringChars(thisSelectVal) : thisSelectVal;
-                    hasChildSel = thisSelectID + formattedVal + '-container';
-                    if ($J('#' + hasChildSel).length) {
-                        $J('#' + hasChildSel).removeClass('hidden');
-                    }
-
-                    if (smState.permitAssembleCharts) {
-                        repositionVarSelect(parentDivID);
-                    }
-                    permitReprintActuals = true; // TODO: how can this be improved
+                    extrasObj.thisSelect = thisSelect;
+                    extrasObj.thisSelectVal = thisSelectVal;
+                    extrasObj.thisSelectID = thisSelectID;
+                    extrasObj.thisDefaultOpt = thisDefaultOpt;
+                    init('selectDimension', extrasObj);
                 }
-
-                // ****************************************
-                // *** case: Assumptions selects change ***
-                // ****************************************
-
+                /** Case: Assumptions selects change **/
                 else {
-                    saveAssumptions();
-                }
-
-                // reset wasSelectedVal
-                for (var key in wasSelectedVal) {
-                    if (wasSelectedVal.hasOwnProperty(key)) {
-                        delete wasSelectedVal[key];
+                    if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
+                        modalMsg('erase');
+                        modalMsg('error', {
+                            msgItem: {
+                                title: 'Choose Another Scenario',
+                                message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
+                                spinner: false,
+                                confirm: {
+                                    msg: 'Ok',
+                                    funcs: []
+                                },
+                                deny: {}
+                            }
+                        });
+                    } else {
+                        init('selectAssumption');
                     }
                 }
-            }
-
-            if (smState.permitAssembleCharts) { // TODO: how can this be improved
-                if (permitReprintActuals) { // TODO: how can this be improved
-                    reprintActuals();
-                }
-                setTimeout(function() {
-                    processingMsg();
-                }, 0);
-
-                // pull vals from all SM selects and reload all charts
-                //assembleCharts();
-            }
-            else {
-                setTimeout(function() {
-                    processingMsg();
-                }, 100);
             }
         });
 
@@ -2265,9 +2306,9 @@ var scManager = (function(){
 
     /** Ante Up **/
 
-    function init(event){
+    function init(event, extrasObject){
         var requestID = requestBuilder(event);
-        requestHandler(requestID);
+        requestHandler(requestID, extrasObject);
     }
 
     return {
