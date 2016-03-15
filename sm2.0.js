@@ -1278,6 +1278,8 @@ var scManager = (function(){
         }
     }
 
+    /** Request Handling **/
+
     function requestBuilder(event){
         var tStamp = Date.now(),
             requestObj = {
@@ -1479,6 +1481,7 @@ var scManager = (function(){
                 break;
             case 'SelectDimension':
                 selectDimension(extrasObj);
+                updateSMDimensionVals();
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SelectScenario':
@@ -2034,6 +2037,7 @@ var scManager = (function(){
             }
         }
 
+        updateSMDimensionVals();
         cb(requestID, subEvent);
     }
 
