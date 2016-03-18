@@ -206,29 +206,35 @@ var scManager = (function(){
     function modalMsg(msgType, msgItem){
         // msgType(s): 'status', 'success', 'error', 'erase'
         var fontColor,
+            overlayDiv = $J('#overlay'),
+            spinnerDiv = $J('#overlayLoading'),
             spinner;
 
         if (typeof msgType !== 'undefined'){
             fontColor = msgType === 'error' ? 'red' : 'green';
             if (msgType === 'erase'){
-                $J('#overlay p').each(function() {
+                overlayDiv.find('p').each(function() {
                     $J(this).empty();
                 });
-                $J('#overlay button').each(function() {
+                overlayDiv.find('button').each(function() {
                     $J(this).hide();
                 });
-                $J('#overlay').hide();
+                spinnerDiv.hide();
+                overlayDiv.hide();
             } else {
                 if (msgItem instanceof Object){
                     setTimeout(function(){
-                        $J('#overlay .titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
+                        overlayDiv.find('.titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
                         if (msgItem.message) {
-                            $J('#overlay .overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
+                            overlayDiv.find('.overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
                         }
-                        if (!$J.isEmptyObject(msgItem.confirm)){
-                            if (msgItem.spinner){
+                        if (msgItem.spinner){
+                            if (spinnerDiv.children().length === 0){
                                 spinner = new Spinner(spinnerOpts).spin(document.getElementById('overlayLoading'));
                             }
+                            spinnerDiv.show();
+                        }
+                        if (!$J.isEmptyObject(msgItem.confirm)){
                             $J('#overlayConfirmBtn').show().html(msgItem.confirm.msg).click(function(){
                                 if (msgItem.confirm.funcs.length > 0){
                                     msgItem.confirm.funcs.forEach(function(item){
@@ -252,7 +258,7 @@ var scManager = (function(){
                             });
 
                         }
-                        $J('#overlay').show();
+                        overlayDiv.show();
                     }, 0);
                 }
             }
@@ -261,29 +267,25 @@ var scManager = (function(){
 
     function processingMsg(){
         modalMsg('status', {
-            msgItem: {
-                title: 'SOLVE&trade; is Processing...',
-                message: '',
-                spinner: true,
-                confirm: {},
-                deny: {}
-            }
+            title: 'SOLVE&trade; is Processing...',
+            message: '',
+            spinner: true,
+            confirm: {},
+            deny: {}
         });
     }
 
     function failedToUpdateMsg(errorItemStr, cbFuncArr){
         var cbArray = cbFuncArr && cbFuncArr.length ? cbFuncArr : [];
         modalMsg('error', {
-            msgItem: {
-                title: 'Sorry!',
-                message: errorItemStr + ' failed to update. Please try again.',
-                spinner: false,
-                confirm: {
-                    msg: 'Try Again',
-                    funcs: cbArray
-                },
-                deny: {}
-            }
+            title: 'Sorry!',
+            message: errorItemStr + ' failed to update. Please try again.',
+            spinner: false,
+            confirm: {
+                msg: 'Try Again',
+                funcs: cbArray
+            },
+            deny: {}
         });
     }
 
@@ -848,13 +850,11 @@ var scManager = (function(){
 
         modalMsg('erase');
         modalMsg('success', {
-            msgItem: {
-                title: 'Creating New Scenario',
-                message: 'A new Scenario is being created. This may take a moment.',
-                spinner: true,
-                confirm: {},
-                deny: {}
-            }
+            title: 'Creating New Scenario',
+            message: 'A new Scenario is being created. This may take a moment.',
+            spinner: true,
+            confirm: {},
+            deny: {}
         });
 
         failureMessage = function(){
@@ -868,16 +868,14 @@ var scManager = (function(){
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
-                    msgItem: {
-                        title: 'Sorry!',
-                        message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
-                        spinner: false,
-                        confirm: {
-                            msg: 'Try Again',
-                            funcs: [recursiveCall]
-                        },
-                        deny: {}
-                    }
+                    title: 'Sorry!',
+                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Try Again',
+                        funcs: [recursiveCall]
+                    },
+                    deny: {}
                 });
                 smState.loadFailures.createNewScenario = 0;
             }
@@ -894,16 +892,14 @@ var scManager = (function(){
 
             modalMsg('erase');
             modalMsg('success', {
-                msgItem: {
-                    title: 'Success',
-                    message: 'Scenario "' + exObject.ScenarioName + '" was created.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Ok',
-                        funcs: [continueRequest]
-                    },
-                    deny: {}
-                }
+                title: 'Success',
+                message: 'Scenario "' + exObject.ScenarioName + '" was created.',
+                spinner: false,
+                confirm: {
+                    msg: 'Ok',
+                    funcs: [continueRequest]
+                },
+                deny: {}
             });
         };
 
@@ -932,16 +928,14 @@ var scManager = (function(){
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
-                    msgItem: {
-                        title: 'Sorry!',
-                        message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
-                        spinner: false,
-                        confirm: {
-                            msg: 'Try Again',
-                            funcs: [recursiveCall]
-                        },
-                        deny: {}
-                    }
+                    title: 'Sorry!',
+                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Try Again',
+                        funcs: [recursiveCall]
+                    },
+                    deny: {}
                 });
                 smState.loadFailures.isScenarioNameUnique = 0;
             }
@@ -953,16 +947,14 @@ var scManager = (function(){
                 if (value.Name === exObject.ScenarioName) {
                     modalMsg('erase');
                     modalMsg('error', {
-                        msgItem: {
-                            title: 'Sorry!',
-                            message: 'The proposed Scenario name already exists. Please choose another name.',
-                            spinner: false,
-                            confirm: {
-                                msg: 'Continue',
-                                funcs: []
-                            },
-                            deny: {}
-                        }
+                        title: 'Sorry!',
+                        message: 'The proposed Scenario name already exists. Please choose another name.',
+                        spinner: false,
+                        confirm: {
+                            msg: 'Continue',
+                            funcs: []
+                        },
+                        deny: {}
                     });
                     testPassed = false;
                 }
@@ -986,13 +978,11 @@ var scManager = (function(){
 
         modalMsg('erase');
         modalMsg('status', {
-            msgItem: {
-                title: 'Deleting Scenario',
-                message: 'Scenario ' + smState.smVals.Scenario + ' is being deleted. This may take a moment.',
-                spinner: true,
-                confirm: {},
-                deny: {}
-            }
+            title: 'Deleting Scenario',
+            message: 'Scenario ' + smState.smVals.Scenario + ' is being deleted. This may take a moment.',
+            spinner: true,
+            confirm: {},
+            deny: {}
         });
 
         smState.loadFailures.scenarioDeleteConfirmed = smState.loadFailures.scenarioDeleteConfirmed || 0;
@@ -1008,16 +998,14 @@ var scManager = (function(){
 
             modalMsg('erase');
             modalMsg('success', {
-                msgItem: {
-                    title: 'Success',
-                    message: 'Scenario ' + smState.smVals.Scenario + ' was successfully deleted.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Ok',
-                        funcs: [continueRequest]
-                    },
-                    deny: {}
-                }
+                title: 'Success',
+                message: 'Scenario ' + smState.smVals.Scenario + ' was successfully deleted.',
+                spinner: false,
+                confirm: {
+                    msg: 'Ok',
+                    funcs: [continueRequest]
+                },
+                deny: {}
             });
         };
 
@@ -1032,16 +1020,14 @@ var scManager = (function(){
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
-                    msgItem: {
-                        title: 'Delete Failed',
-                        message: 'Scenario ' + smState.smVals.Scenario + ' failed to delete.',
-                        spinner: false,
-                        confirm: {
-                            msg: 'Try Again',
-                            funcs: [tryAgain]
-                        },
-                        deny: {}
-                    }
+                    title: 'Delete Failed',
+                    message: 'Scenario ' + smState.smVals.Scenario + ' failed to delete.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Try Again',
+                        funcs: [tryAgain]
+                    },
+                    deny: {}
                 });
                 smState.loadFailures.scenarioDeleteConfirmed = 0;
             }
@@ -1060,18 +1046,16 @@ var scManager = (function(){
 
         modalMsg('erase');
         modalMsg('status', {
-            msgItem: {
-                title: 'Confirm Delete',
-                message: 'Are you sure you want to delete Scenario ' + smState.smVals.Scenario + '?',
-                spinner: false,
-                confirm: {
-                    msg: 'Yes',
-                    funcs: [confirmed]
-                },
-                deny: {
-                    msg: 'No',
-                    funcs: [cancel]
-                }
+            title: 'Confirm Delete',
+            message: 'Are you sure you want to delete Scenario ' + smState.smVals.Scenario + '?',
+            spinner: false,
+            confirm: {
+                msg: 'Yes',
+                funcs: [confirmed]
+            },
+            deny: {
+                msg: 'No',
+                funcs: [cancel]
             }
         });
     }
@@ -1179,16 +1163,14 @@ var scManager = (function(){
             smState.loadFailures.saveDimensionSelections = 0;
             modalMsg('erase');
             modalMsg('success', {
-                msgItem: {
-                    title: 'Success',
-                    message: 'Scenario "' + smState.smVals.Scenario + '" was updated.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Ok',
-                        funcs: []
-                    },
-                    deny: {}
-                }
+                title: 'Success',
+                message: 'Scenario "' + smState.smVals.Scenario + '" was updated.',
+                spinner: false,
+                confirm: {
+                    msg: 'Ok',
+                    funcs: []
+                },
+                deny: {}
             });
         };
 
@@ -1522,7 +1504,7 @@ var scManager = (function(){
         var eventObj = smState.eventRequests[rID],
             eventsCompleted = 0;
 
-        smState.eventRequests[rID][subEv] = true;
+        smState.eventRequests[rID].subEvents[smState.eventRequests[rID].stage][subEv] = true;
 
         for (var anEvent in eventObj.subEvents[eventObj.stage]){
             if (eventObj.subEvents[eventObj.stage].hasOwnProperty(anEvent)){
@@ -1533,7 +1515,7 @@ var scManager = (function(){
         }
 
         if (eventsCompleted === Object.keys(eventObj.subEvents[eventObj.stage]).length){
-            eventObj.stage = (eventObj.stage)++;
+            (eventObj.stage)++;
 
             if (eventObj.stage <= eventObj.subEvents.length){
                 requestHandler(rID);
@@ -2241,16 +2223,14 @@ var scManager = (function(){
                     if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
                         modalMsg('erase');
                         modalMsg('error', {
-                            msgItem: {
-                                title: 'Choose Another Scenario',
-                                message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
-                                spinner: false,
-                                confirm: {
-                                    msg: 'Ok',
-                                    funcs: []
-                                },
-                                deny: {}
-                            }
+                            title: 'Choose Another Scenario',
+                            message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
+                            spinner: false,
+                            confirm: {
+                                msg: 'Ok',
+                                funcs: []
+                            },
+                            deny: {}
                         });
                     } else {
                         init('selectAssumption');
@@ -2318,7 +2298,8 @@ var scManager = (function(){
     return {
         smInit: init,
         getSMVals: smState.smVals,
-        getTM1CurrentYear: getTM1CurrentYear
+        getTM1CurrentYear: getTM1CurrentYear,
+        tm1CurrentYear: tm1CurrentYear
     };
 })();
 
