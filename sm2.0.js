@@ -223,7 +223,8 @@ var scManager = (function(){
                 overlayDiv.hide();
             } else {
                 if (msgItem instanceof Object){
-                    setTimeout(function(){
+                    // TODO: maybe remove setTimeout
+                    //setTimeout(function(){
                         overlayDiv.find('.titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
                         if (msgItem.message) {
                             overlayDiv.find('.overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
@@ -259,7 +260,7 @@ var scManager = (function(){
 
                         }
                         overlayDiv.show();
-                    }, 0);
+                    //}, 0);
                 }
             }
         }
@@ -1586,9 +1587,12 @@ var scManager = (function(){
 
         smState.loadFailures[failureName] = smState.loadFailures[failureName] || 0;
 
-        onSuccess = function(resultObj) {
-            var formattedName = formatStringSpace(resultObj.Results.DimName);
-
+        onSuccess = function(resultObj, localTest) {
+            if (localTest !== 'fromLocalStorage'){
+                localforage.setItem(formattedName, resultObj, function(){
+                    // do nothing
+                });
+            }
             smState.loadFailures[failureName] = 0;
             smState.DimensionsData[formattedName] = resultObj;
             (smState.singleDimensionDataSuccesses)++;
@@ -1613,13 +1617,19 @@ var scManager = (function(){
             }
         };
 
-        // TODO: async = true, then work on value collisions
-        es.get(method, parameters, onSuccess, onFailure, false);
+        localforage.getItem(formattedName, function(err, val){
+            if (val !== null){
+                onSuccess(val, 'fromLocalStorage');
+            } else {
+                es.get(method, parameters, onSuccess, onFailure, true);
+            }
+        });
     }
 
     function loadDimensionsData(cb, cb2, requestID, subEvent) {
         var key,
-            params = {};
+            params = {},
+            pCopy;
 
         for (key in DD_ON_LOAD){ // create this first so that "counter" is accurate in loadSingleDimensionData
             if (DD_ON_LOAD.hasOwnProperty(key)) {
@@ -1633,7 +1643,8 @@ var scManager = (function(){
                 if (DD_ON_LOAD[key].webMParamKey2) {
                     params[DD_ON_LOAD[key].webMParamKey2] = DD_ON_LOAD[key].webMParamVal2;
                 }
-                loadSingleDimensionData(cb, DD_ON_LOAD[key].methodName, params, cb2, requestID, subEvent);
+                pCopy = $J.extend(true, {}, params);
+                loadSingleDimensionData(cb, DD_ON_LOAD[key].methodName, pCopy, cb2, requestID, subEvent);
             }
         }
     }
