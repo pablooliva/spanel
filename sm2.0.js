@@ -912,35 +912,10 @@ var scManager = (function(){
     function isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent){
         var params = { "DimName": "Scenario" }, // web method: TM1DimensionMembers?DimName=Scenario
             testPassed = true,
-            failureMessage,
             onSuccess,
             onFailure;
 
         smState.loadFailures.isScenarioNameUnique = smState.loadFailures.isScenarioNameUnique || 0;
-
-        failureMessage = function(){
-            var recursiveCall = function(){
-                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
-            };
-
-            if (smState.loadFailures.isScenarioNameUnique < MAX_FAILS){
-                (smState.loadFailures.isScenarioNameUnique)++;
-                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
-            } else {
-                modalMsg('erase');
-                modalMsg('error', {
-                    title: 'Sorry!',
-                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Try Again',
-                        funcs: [recursiveCall]
-                    },
-                    deny: {}
-                });
-                smState.loadFailures.isScenarioNameUnique = 0;
-            }
-        };
 
         onSuccess = function(resultObj) {
             smState.loadFailures.isScenarioNameUnique = 0;
@@ -966,7 +941,29 @@ var scManager = (function(){
             }
         };
 
-        onFailure = failureMessage();
+        onFailure = function(){
+            var recursiveCall = function(){
+                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
+            };
+
+            if (smState.loadFailures.isScenarioNameUnique < MAX_FAILS){
+                (smState.loadFailures.isScenarioNameUnique)++;
+                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
+            } else {
+                modalMsg('erase');
+                modalMsg('error', {
+                    title: 'Sorry!',
+                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Try Again',
+                        funcs: [recursiveCall]
+                    },
+                    deny: {}
+                });
+                smState.loadFailures.isScenarioNameUnique = 0;
+            }
+        };
 
         es.get("TM1DimensionMembers", params, onSuccess, onFailure, true);
     }
@@ -1287,13 +1284,15 @@ var scManager = (function(){
                     },
                     { // stage 3
                         DimensionSelections: false,
-                        SmOnPageLoad: false
+                        SetEventListeners: false
                     },
                     { // stage 4
                         Charts: false,
-                        Actuals: false
+                        Actuals: false,
+                        Select2: false
                     },
                     { // stage 5
+                        CollapseActAndAss: false,
                         FinishProcessing: false
                     }
                 ];
@@ -1441,6 +1440,9 @@ var scManager = (function(){
                 assembleCharts();
                 postRequestProcessor(rID, subEv);
                 break;
+            case 'CollapseActAndAss':
+                collapseActualsAndAssumptions();
+                break;
             case 'CreateScenario':
                 isScenarioNameUnique(extrasObj, createNewScenario, postRequestProcessor, rID, subEv);
                 break;
@@ -1459,6 +1461,14 @@ var scManager = (function(){
                 modalMsg('erase'); // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
                 postRequestProcessor(rID, subEv);
                 break;
+            case 'Scenarios':
+                $J('#curScenarioSel').empty();
+                loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
+                break;
+            case 'Select2':
+                applySelect2(['scenario', 'dimensions', 'assumptions']);
+                postRequestProcessor(rID, subEv);
+                break;
             case 'SelectAssumption':
                 saveAssumptions(postRequestProcessor, rID, subEv);
                 break;
@@ -1469,6 +1479,12 @@ var scManager = (function(){
                 break;
             case 'SelectScenario':
                 selectScenario(extrasObj, postRequestProcessor, rID, subEv);
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'SetEventListeners':
+                sectionScenariosEvents();
+                dropdownAndMenuEvents();
+                adjustSMPanel(); // adjust height of SM panel
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SetPageScenario':
@@ -1482,18 +1498,6 @@ var scManager = (function(){
                         setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
                     }
                 }
-                postRequestProcessor(rID, subEv);
-                break;
-            case 'Scenarios':
-                $J('#curScenarioSel').empty();
-                loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
-                break;
-            case 'SmOnPageLoad':
-                applySelect2(['scenario', 'dimensions', 'assumptions']);
-                sectionScenariosEvents();
-                dropdownAndMenuEvents();
-                adjustSMPanel(); // adjust height of SM panel
-                collapseActualsAndAssumptions();
                 postRequestProcessor(rID, subEv);
                 break;
             default:
@@ -2074,11 +2078,11 @@ var scManager = (function(){
     function collapseActualsAndAssumptions() {
         $J('#smEntities table').toggle();
         $J('#smEntities p').click(function() {
-            $J(this).closest('.sectContainer').find('table').toggle();
+            $J(this).next().toggle();
             $J(this).toggle();
         });
         $J('#smEntities th.varGroupTH').click(function() {
-            $J(this).closest('.sectContainer').find('table').toggle();
+            $J(this).closest('table').toggle();
             $J(this).closest('.sectContainer').find('p.sectTitle').toggle();
         });
     }
