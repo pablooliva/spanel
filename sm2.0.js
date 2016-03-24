@@ -842,7 +842,6 @@ var scManager = (function(){
 
     function createNewScenario(exObject, cb, requestID, subEvent) {
         var params = { "p_element": exObject.ScenarioName }, // web method: ScenarioElementInsert?p_element=newScenarioNameStr
-            failureMessage,
             onSuccess,
             onFailure,
             newParamsObj = {};
@@ -857,30 +856,6 @@ var scManager = (function(){
             confirm: {},
             deny: {}
         });
-
-        failureMessage = function(){
-            var recursiveCall = function(){
-                createNewScenario(exObject, cb, requestID, subEvent);
-            };
-
-            if (smState.loadFailures.createNewScenario < MAX_FAILS){
-                (smState.loadFailures.createNewScenario)++;
-                createNewScenario(exObject, cb, requestID, subEvent);
-            } else {
-                modalMsg('erase');
-                modalMsg('error', {
-                    title: 'Sorry!',
-                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Try Again',
-                        funcs: [recursiveCall]
-                    },
-                    deny: {}
-                });
-                smState.loadFailures.createNewScenario = 0;
-            }
-        };
 
         onSuccess = function() {
             var continueRequest = function(){
@@ -904,9 +879,31 @@ var scManager = (function(){
             });
         };
 
-        onFailure = failureMessage();
+        onFailure = function(){
+            var recursiveCall = function(){
+                createNewScenario(exObject, cb, requestID, subEvent);
+            };
 
-        es.get("ScenarioElementInsert", params, onSuccess, onFailure, true, "json", 120000, "There is still no response from the server. Do you want to abort the request?", 120000);
+            if (smState.loadFailures.createNewScenario < MAX_FAILS){
+                (smState.loadFailures.createNewScenario)++;
+                createNewScenario(exObject, cb, requestID, subEvent);
+            } else {
+                modalMsg('erase');
+                modalMsg('error', {
+                    title: 'Sorry!',
+                    message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Try Again',
+                        funcs: [recursiveCall]
+                    },
+                    deny: {}
+                });
+                smState.loadFailures.createNewScenario = 0;
+            }
+        };
+
+        es.get("ScenarioElementInsert", params, onSuccess, onFailure, false, "json", 120000, "There is still no response from the server. Do you want to abort the request?", 120000);
     }
 
     function isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent){
@@ -965,7 +962,7 @@ var scManager = (function(){
             }
         };
 
-        es.get("TM1DimensionMembers", params, onSuccess, onFailure, true);
+        es.get("TM1DimensionMembers", params, onSuccess, onFailure, false);
     }
 
     function scenarioDeleteConfirmed(cb, requestID, subEvent){
@@ -1288,8 +1285,7 @@ var scManager = (function(){
                     },
                     { // stage 4
                         Charts: false,
-                        Actuals: false,
-                        Select2: false
+                        Actuals: false
                     },
                     { // stage 5
                         CollapseActAndAss: false,
@@ -1465,10 +1461,6 @@ var scManager = (function(){
                 $J('#curScenarioSel').empty();
                 loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
                 break;
-            case 'Select2':
-                applySelect2(['scenario', 'dimensions', 'assumptions']);
-                postRequestProcessor(rID, subEv);
-                break;
             case 'SelectAssumption':
                 saveAssumptions(postRequestProcessor, rID, subEv);
                 break;
@@ -1498,6 +1490,13 @@ var scManager = (function(){
                         setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
                     }
                 }
+
+
+
+                debugger;
+
+
+
                 postRequestProcessor(rID, subEv);
                 break;
             default:
@@ -1785,17 +1784,7 @@ var scManager = (function(){
                 tempArr.push([assTitle, assSect, assVal]);
             });
 
-            /* TODO: remove
-            for (key in assumptions) {
-                if (assumptions.hasOwnProperty(key)) {
-                    assTitle = assumptions[key].ScenarioAssumption;
-                    assTitle = assTitle.replace(' Change Percent', '');
-                    assVal = assumptions[key].AnalysisYear;
-                    tempArr.push([assTitle, assVal]);
-                }
-            }*/
-
-            cb(tempArr, cb2, requestID, subEvent);
+            cb(tempArr, cb2, requestID, subEvent, smState);
         };
 
         onFailure = function() {
@@ -1840,6 +1829,8 @@ var scManager = (function(){
             selectCurrScenario.val(selectedValue).trigger('change', selectedValue);
             selectCurrScenario.next().find('.select2-selection__rendered').text(selectedValue);
         }
+
+        applySelect2(['scenario']);
 
         cb(requestID, subEvent);
     }
@@ -1909,6 +1900,8 @@ var scManager = (function(){
             }
         }
 
+        applySelect2(['dimensions']);
+
         cb(requestID, subEvent);
     }
 
@@ -1970,42 +1963,24 @@ var scManager = (function(){
             i++;
         }
 
+        applySelect2(['assumptions']);
+
         cb(requestID, subEvent);
     }
 
     function buildActuals(actualsArr, cb, requestID, subEvent) {
-        var assumptionsExist,
+        var smEntities,
             i = 0,
-            newSectionTitle,
-            arrSectionTitle,
             arrActTitle,
             arrActVal,
-            savedAssVal,
             formattedResult;
 
-        assumptionsExist = $J('#smEntities .assumptionVal').first().has('select').length ? $J('#smEntities .assumptionVal') : null;
-        if (assumptionsExist){
-            $J('#smEntities').empty();
-        }
-
-        newSectionTitle = '';
+        smEntities = $J('#smEntities .actualVal');
         while (i < actualsArr.length) {
-            arrSectionTitle = actualsArr[i][1];
-            if (arrSectionTitle !== newSectionTitle) { // if new Section title found, print
-                newSectionTitle = arrSectionTitle;
-                if (arrSectionTitle in DISPLAY_SECTION_NAMES) {
-                    arrSectionTitle = DISPLAY_SECTION_NAMES[arrSectionTitle].displayName;
-                }
-                $J('#smEntities').append('<div class="sectContainer"><p class="sectTitle">+ ' + arrSectionTitle + '</p><table border="0"><thead><tr><th class="varGroupTH">- ' + arrSectionTitle + '</th><th class="varGroupVal">Actual</th><th class="varGroupVal">% Change</th></tr></thead><tbody></tbody></table></div>');
-            }
-
-            // add rows to Section
             arrActTitle = actualsArr[i][0];
             arrActVal = actualsArr[i][2];
-            savedAssVal = assumptionsExist ? assumptionsExist.eq(i).html() : '';
-
             formattedResult = formatActualVal(arrActTitle, arrActVal);
-            $J('#smEntities div:last-child table tbody').append('<tr><td class="varLabelTD">' + formattedResult[0] + '</td><td class="actualVal">' + formattedResult[1] + '</td><td class="assumptionVal">' + savedAssVal + '</td></tr>');
+            smEntities.eq(i).text(formattedResult[1]);
             i++;
         }
 
@@ -2191,11 +2166,22 @@ var scManager = (function(){
     }
 
     function dropdownAndMenuEvents(){
-        /* TODO: delete */
-        /* // disable Assumptions dropdowns if Actual ("default") Scenario selected
+        // disable Assumptions dropdowns if Actual ("default") Scenario selected
         $J('#smEntities').on('click', '.select2-selection', function() {
-        moved to MAIN below
-        }) */
+            if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
+                modalMsg('erase');
+                modalMsg('error', {
+                    title: 'Choose Another Scenario',
+                    message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Ok',
+                        funcs: []
+                    },
+                    deny: {}
+                });
+            }
+        });
 
         // save currently selected sub-select value if sub-select is active
         $J('#smFilters').on('click', '.select2-selection__rendered', function() {
@@ -2235,21 +2221,7 @@ var scManager = (function(){
                 }
                 /** Case: Assumptions selects change **/
                 else {
-                    if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
-                        modalMsg('erase');
-                        modalMsg('error', {
-                            title: 'Choose Another Scenario',
-                            message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
-                            spinner: false,
-                            confirm: {
-                                msg: 'Ok',
-                                funcs: []
-                            },
-                            deny: {}
-                        });
-                    } else {
-                        init('selectAssumption');
-                    }
+                    init('selectAssumption');
                 }
             }
         });
