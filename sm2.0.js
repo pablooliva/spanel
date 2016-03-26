@@ -1466,7 +1466,7 @@ var scManager = (function(){
                 break;
             case 'SetEventListeners':
                 sectionScenariosEvents();
-                dropdownAndMenuEvents();
+                generalSMEventsHandler();
                 adjustSMPanel(); // adjust height of SM panel
                 postRequestProcessor(rID, subEv);
                 break;
@@ -1809,13 +1809,14 @@ var scManager = (function(){
             selectCurrScenario.append(optionStr);
         });
 
+        /* TODO: delete if not needed after all testing is complete
         if (selectedValue){
-            console.log(selectedValue);
             // trigger change so that it registers with select2
             selectCurrScenario.val(selectedValue).trigger('change', selectedValue);
             selectCurrScenario.next().find('.select2-selection__rendered').text(selectedValue);
-        }
+        }*/
 
+        scenarioDDLEventsHandler();
         applySelect2(['scenario']);
 
         cb(requestID, subEvent);
@@ -1952,6 +1953,7 @@ var scManager = (function(){
             i++;
         }
 
+        assumptionDDLClickHandler();
         applySelect2(['assumptions']);
 
         cb(requestID, subEvent);
@@ -1977,30 +1979,6 @@ var scManager = (function(){
     }
 
     /** Set & Display Components **/
-
-    function showDimensionSelections(cb, requestID, subEvent) {
-        var key,
-            savedSelectVal,
-            index = 0,
-            thisOption;
-
-        for (key in DD_ON_LOAD){
-            if (DD_ON_LOAD.hasOwnProperty(key)){
-                clearChildSelect(DD_ON_LOAD[key].selectID); // reset dropdowns first
-                savedSelectVal = smState.DimensionsSelections[index]; // get saved Option value
-                $J('#' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1)).find('option').each(function() {
-                    thisOption = $J(this);
-                    if (thisOption.text() === savedSelectVal) {
-                        showIndDimSelection(thisOption);
-                    }
-                });
-                index++;
-            }
-        }
-
-        updateSMDimensionVals();
-        cb(requestID, subEvent);
-    }
 
     function showIndDimSelection(selectedOption) {
         var thisClosestSelect = selectedOption.closest('select'),
@@ -2037,6 +2015,31 @@ var scManager = (function(){
         }
         containerDivID = thisClosestSelect.attr('id');
         $J('#' + containerDivID + '-container').removeClass('hidden'); // show container div
+    }
+
+    function showDimensionSelections(cb, requestID, subEvent) {
+        var key,
+            savedSelectVal,
+            index = 0,
+            thisOption;
+
+        for (key in DD_ON_LOAD){
+            if (DD_ON_LOAD.hasOwnProperty(key)){
+                clearChildSelect(DD_ON_LOAD[key].selectID); // reset dropdowns first
+                savedSelectVal = smState.DimensionsSelections[index]; // get saved Option value
+                $J('#' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1)).find('option').each(function() {
+                    thisOption = $J(this);
+                    if (thisOption.text() === savedSelectVal) {
+                        showIndDimSelection(thisOption);
+                    }
+                });
+                index++;
+            }
+        }
+
+        dimensionDDLEventsHandler();
+        updateSMDimensionVals();
+        cb(requestID, subEvent);
     }
 
     function collapseActualsAndAssumptions() {
@@ -2099,7 +2102,7 @@ var scManager = (function(){
         });
     }
 
-    function sectionScenariosEvents() {
+    function sectionScenariosEvents(){
         var nameInput,
             defVal = '',
             errorVal = 'Please enter a name',
@@ -2154,9 +2157,76 @@ var scManager = (function(){
         });
     }
 
-    function dropdownAndMenuEvents(){
-        // disable Assumptions dropdowns if Actual ("default") Scenario selected
-        $J('#smEntities').on('click', '.select2-selection', function() {
+    function scenarioDDLEventsHandler(){
+        var thisDDL = $J('#curScenarioSel');
+
+        thisDDL.unbind('change');
+        thisDDL.change(function(){
+            var extrasObj = {};
+
+            extrasObj.thisSelectVal = $J(this).val();
+            init('selectScenario', extrasObj);
+        });
+    }
+
+    function dimensionDDLEventsHandler(){
+        var thisDDL = $J('.dimensionDD'),
+            thisRowLabel = $J('.dimRowLabel');
+
+        thisDDL.unbind('click').unbind('change');
+        thisRowLabel.unbind('click');
+
+        thisRowLabel.click(function() {
+            var thisRowLabel = $J(this),
+                divToShow,
+                containerToShow;
+
+            $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // clear hover styling from all row labels
+            thisRowLabel.addClass('dimRowLabelFocus'); // add hover styling to THIS row label
+            expandedSM(true);
+            $J('#smFilters').addClass('dimRowDropdownsFocus'); // add gray background, appears to apply to dropdowns column only
+            $J('.varSelect').addClass('hidden'); // hide all dropdowns
+            divToShow = thisRowLabel.attr('dimid'); // show dropdown for label being hovered over
+            containerToShow = thisRowLabel.attr('ddid');
+            divToShow = formatStringSpace(divToShow);
+            $J('#' + divToShow).removeClass('hidden');
+            $J('#' + containerToShow + '-container').removeClass('hidden');
+            repositionVarSelect(divToShow);
+        });
+
+        $J('#smFilters').on('click', '.select2-selection__rendered', function() {
+            var thisSelID = $J(this).closest('div').find('select').attr('id'),
+                hasDepends = thisSelID + '-' + formatStringChars($J(this).text()),
+                subSelectID;
+
+            if (hasDepends in dependSelects) {
+                subSelectID = dependSelects[hasDepends];
+                if (!$J('#' + subSelectID + '-container').hasClass('hidden')) {
+                    wasSelectedVal[thisSelID] = subSelectID;
+                }
+            }
+        });
+
+        thisDDL.change(function(){
+            var thisSelect = $J(this),
+                extrasObj = {};
+
+            extrasObj.thisSelect = thisSelect;
+            extrasObj.thisSelectVal = thisSelect.val();
+            extrasObj.thisSelectID = thisSelect.attr('id');
+            extrasObj.thisDefaultOpt = thisSelect.find('option:first').text();
+            init('selectDimension', extrasObj);
+        });
+    }
+
+    function assumptionDDLClickHandler(){
+        var thisSection = $J('#smEntities'),
+            thisDDL = $J('.varPercent');
+
+        thisSection.unbind('click');
+        thisDDL.unbind('change');
+
+        thisSection.on('click', '.select2-selection', function() {
             if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -2172,6 +2242,32 @@ var scManager = (function(){
             }
         });
 
+        thisDDL.change(function(){
+            init('selectAssumption');
+        });
+
+    }
+
+    function generalSMEventsHandler(){
+        /* TODO: delete
+        // disable Assumptions dropdowns if Actual ("default") Scenario selected
+        $J('#smEntities').on('click', '.select2-selection', function() {
+            if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
+                modalMsg('erase');
+                modalMsg('error', {
+                    title: 'Choose Another Scenario',
+                    message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
+                    spinner: false,
+                    confirm: {
+                        msg: 'Ok',
+                        funcs: []
+                    },
+                    deny: {}
+                });
+            }
+        });*/
+
+        /* TODO: delete
         // save currently selected sub-select value if sub-select is active
         $J('#smFilters').on('click', '.select2-selection__rendered', function() {
             var thisSelID = $J(this).closest('div').find('select').attr('id'),
@@ -2184,8 +2280,9 @@ var scManager = (function(){
                     wasSelectedVal[thisSelID] = subSelectID;
                 }
             }
-        });
+        });*/
 
+        /* TODO: delete
         // MAIN: handles all dropdown selections events
         $J('#sm').on('change', 'select', function(event, selectVal) {
             var thisSelect = $J(this),
@@ -2194,27 +2291,31 @@ var scManager = (function(){
                 thisDefaultOpt = thisSelect.find('option:first').text(),
                 extrasObj = {};
 
-            /** Case: Scenario select change **/
+            /!** Case: Scenario select change **!/
             if (thisSelectID === "curScenarioSel") {
+                /!* TODO: delete
                 extrasObj.thisSelectVal = thisSelectVal;
-                init('selectScenario', extrasObj);
+                init('selectScenario', extrasObj);*!/
             }
             else {
-                /** Case: Dimensions selects change **/
+                /!** Case: Dimensions selects change **!/
                 if (thisSelect.closest('section').attr('id') === 'smFilters') {
+                    /!* TODO: delete
                     extrasObj.thisSelect = thisSelect;
                     extrasObj.thisSelectVal = thisSelectVal;
                     extrasObj.thisSelectID = thisSelectID;
                     extrasObj.thisDefaultOpt = thisDefaultOpt;
-                    init('selectDimension', extrasObj);
+                    init('selectDimension', extrasObj);*!/
                 }
-                /** Case: Assumptions selects change **/
+                /!** Case: Assumptions selects change **!/
                 else {
-                    init('selectAssumption');
+                    /!* TODO: delete
+                    init('selectAssumption');*!/
                 }
             }
-        });
+        });*/
 
+        /* TODO: delete
         // Dimension label click, display all related elements
         $J('#dimRowLabels').on('click', '.dimRowLabel', function() {
             var thisRowLabel = $J(this),
@@ -2232,7 +2333,7 @@ var scManager = (function(){
             $J('#' + divToShow).removeClass('hidden');
             $J('#' + containerToShow + '-container').removeClass('hidden');
             repositionVarSelect(divToShow);
-        });
+        });*/
 
         // onMouseLeave, clear Dimension and related elements
         $J('#smFilters').mouseleave(function() {
