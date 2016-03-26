@@ -1412,9 +1412,6 @@ var scManager = (function(){
 
         switch(subEv){
             case 'Actuals':
-                $J('#smEntities .actualVal').each(function(){
-                    $J(this).empty();
-                });
                 loadActuals(buildActuals, postRequestProcessor, rID, subEv);
                 break;
             case 'AdjustSM':
@@ -1422,9 +1419,6 @@ var scManager = (function(){
                 postRequestProcessor(rID, subEv);
                 break;
             case 'Assumptions':
-                $J('#smEntities .assumptionVal').each(function(){
-                    $J(this).empty();
-                });
                 loadAssumptions(buildAssumptions, postRequestProcessor, rID, subEv);
                 break;
             case 'BeginProcessing':
@@ -1446,8 +1440,6 @@ var scManager = (function(){
                 deleteScenario(postRequestProcessor, rID, subEv);
                 break;
             case 'Dimensions':
-                $J('#dimRowLabels').empty();
-                $J('#dimRowDropdowns').empty();
                 loadDimensionsData(buildDimensionsDD, postRequestProcessor, rID, subEv);
                 break;
             case 'DimensionSelections':
@@ -1458,7 +1450,6 @@ var scManager = (function(){
                 postRequestProcessor(rID, subEv);
                 break;
             case 'Scenarios':
-                $J('#curScenarioSel').empty();
                 loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
                 break;
             case 'SelectAssumption':
@@ -1490,13 +1481,6 @@ var scManager = (function(){
                         setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
                     }
                 }
-
-
-
-                debugger;
-
-
-
                 postRequestProcessor(rID, subEv);
                 break;
             default:
@@ -1814,6 +1798,7 @@ var scManager = (function(){
             optionStr = '',
             selectedValue;
 
+        selectCurrScenario.empty();
         smState.ScenarioNames.forEach(function(value) {
             optionStr = '<option value="' + value + '"';
             if (value === smState.smVals.Scenario) {
@@ -1825,6 +1810,7 @@ var scManager = (function(){
         });
 
         if (selectedValue){
+            console.log(selectedValue);
             // trigger change so that it registers with select2
             selectCurrScenario.val(selectedValue).trigger('change', selectedValue);
             selectCurrScenario.next().find('.select2-selection__rendered').text(selectedValue);
@@ -1884,12 +1870,17 @@ var scManager = (function(){
     }
 
     function buildDimensionsDD(cb, requestID, subEvent) {
-        var key;
+        var dLabels = $J('#dimRowLabels'),
+            dDDowns = $J('#dimRowDropdowns'),
+            key;
+
+        dLabels.empty();
+        dDDowns.empty();
 
         for (key in DD_ON_LOAD){
             if (DD_ON_LOAD.hasOwnProperty(key)) {
-                $J('#dimRowLabels').append('<div class="dimRowLabel" dimid="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '" ddid="' + DD_ON_LOAD[key].selectID + '">' + DD_ON_LOAD[key].defOptName + '</div>');
-                $J('#dimRowDropdowns').append('<div class="clear-fix varSelect" id="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '"></div>');
+                dLabels.append('<div class="dimRowLabel" dimid="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '" ddid="' + DD_ON_LOAD[key].selectID + '">' + DD_ON_LOAD[key].defOptName + '</div>');
+                dDDowns.append('<div class="clear-fix varSelect" id="' + formatStringSpace(DD_ON_LOAD[key].webMParamVal1) + '"></div>');
                 smState.DimensionsData[key].Results.Members.forEach(function(value) {
                     if (value.ID === DD_ON_LOAD.Period.resultsMembersID) { // if this == period, then parse differently
                         iterateDimChildren(value.Children, DD_ON_LOAD[key], null, true);
@@ -1939,9 +1930,7 @@ var scManager = (function(){
             arrAssVal;
 
         actualsExist = $J('#smEntities .actualVal').first().text() !== '' ? $J('#smEntities .actualVal') : null;
-        if (actualsExist){
-            $J('#smEntities').empty();
-        }
+        $J('#smEntities').empty();
 
         newSectionTitle = '';
         while (i < assumptionsArr.length) {
@@ -1980,7 +1969,7 @@ var scManager = (function(){
             arrActTitle = actualsArr[i][0];
             arrActVal = actualsArr[i][2];
             formattedResult = formatActualVal(arrActTitle, arrActVal);
-            smEntities.eq(i).text(formattedResult[1]);
+            smEntities.eq(i).empty().text(formattedResult[1]);
             i++;
         }
 
