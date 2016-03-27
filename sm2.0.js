@@ -211,20 +211,19 @@ var scManager = (function(){
             spinner;
 
         if (typeof msgType !== 'undefined'){
-            fontColor = msgType === 'error' ? 'red' : 'green';
-            if (msgType === 'erase'){
-                overlayDiv.find('p').each(function() {
-                    $J(this).empty();
-                });
-                overlayDiv.find('button').each(function() {
-                    $J(this).hide();
-                });
-                spinnerDiv.hide();
-                overlayDiv.hide();
-            } else {
-                if (msgItem instanceof Object){
-                    // TODO: maybe remove setTimeout
-                    //setTimeout(function(){
+            setTimeout(function(){
+                fontColor = msgType === 'error' ? 'red' : 'green';
+                if (msgType === 'erase'){
+                    overlayDiv.find('p').each(function() {
+                        $J(this).empty();
+                    });
+                    overlayDiv.find('button').each(function() {
+                        $J(this).hide();
+                    });
+                    spinnerDiv.hide();
+                    overlayDiv.hide();
+                } else {
+                    if (msgItem instanceof Object){
                         overlayDiv.find('.titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
                         if (msgItem.message) {
                             overlayDiv.find('.overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
@@ -237,32 +236,32 @@ var scManager = (function(){
                         }
                         if (!$J.isEmptyObject(msgItem.confirm)){
                             $J('#overlayConfirmBtn').show().html(msgItem.confirm.msg).click(function(){
+                                $J(this).unbind('click');
+                                modalMsg('erase');
                                 if (msgItem.confirm.funcs.length > 0){
                                     msgItem.confirm.funcs.forEach(function(item){
                                         item();
                                     });
                                 }
-                                $J(this).unbind('click');
-                                modalMsg('erase');
                             });
 
                         }
                         if (!$J.isEmptyObject(msgItem.deny)){
-                            $J('#overlayConfirmBtn').show().html(msgItem.deny.msg).click(function(){
+                            $J('#overlayDenyBtn').show().html(msgItem.deny.msg).click(function(){
+                                $J(this).unbind('click');
+                                modalMsg('erase');
                                 if (msgItem.deny.funcs.length > 0){
                                     msgItem.deny.funcs.forEach(function(item){
                                         item();
                                     });
                                 }
-                                $J(this).unbind('click');
-                                modalMsg('erase');
                             });
 
                         }
                         overlayDiv.show();
-                    //}, 0);
+                    }
                 }
-            }
+            }, 0);
         }
     }
 
@@ -859,6 +858,7 @@ var scManager = (function(){
 
         onSuccess = function() {
             var continueRequest = function(){
+                processingMsg();
                 cb(requestID, subEvent);
             };
 
@@ -984,6 +984,7 @@ var scManager = (function(){
 
         onSuccess = function() {
             var continueRequest = function(){
+                processingMsg();
                 cb(requestID, subEvent);
             };
 
@@ -1011,7 +1012,7 @@ var scManager = (function(){
 
             if (smState.loadFailures.scenarioDeleteConfirmed < MAX_FAILS){
                 (smState.loadFailures.scenarioDeleteConfirmed)++;
-                scenarioDeleteConfirmed();
+                scenarioDeleteConfirmed(cb, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -1307,6 +1308,7 @@ var scManager = (function(){
                     },
                     {
                         Scenarios: false,
+                        HideActsAndAss: false,
                         Assumptions: false
                     },
                     {
@@ -1315,6 +1317,11 @@ var scManager = (function(){
                     {
                         Charts: false,
                         Actuals: false
+                    },
+                    {
+                        CollapseActAndAss: false,
+                        ResetSMDisplay: false,
+                        FinishProcessing: false
                     }
                 ];
                 break;
@@ -1328,6 +1335,7 @@ var scManager = (function(){
                     },
                     {
                         Scenarios: false,
+                        HideActsAndAss: false,
                         Assumptions: false
                     },
                     {
@@ -1336,6 +1344,10 @@ var scManager = (function(){
                     {
                         Charts: false,
                         Actuals: false
+                    },
+                    {
+                        CollapseActAndAss: false,
+                        FinishProcessing: false
                     }
                 ];
                 break;
@@ -1352,6 +1364,7 @@ var scManager = (function(){
                     },
                     {
                         DimensionSelections: false,
+                        HideActsAndAss: false,
                         Assumptions: false
                     },
                     {
@@ -1359,6 +1372,7 @@ var scManager = (function(){
                         Actuals: false
                     },
                     {
+                        CollapseActAndAss: false,
                         FinishProcessing: false
                     }
                 ];
@@ -1436,6 +1450,7 @@ var scManager = (function(){
                 break;
             case 'CollapseActAndAss':
                 collapseActualsAndAssumptions();
+                postRequestProcessor(rID, subEv);
                 break;
             case 'CreateScenario':
                 isScenarioNameUnique(createNewScenario, postRequestProcessor, rID, subEv);
@@ -1451,6 +1466,14 @@ var scManager = (function(){
                 break;
             case 'FinishProcessing':
                 modalMsg('erase'); // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'HideActsAndAss':
+                hideActsAndAss();
+                postRequestProcessor(rID, subEv);
+                break;
+            case 'ResetSMDisplay':
+                resetSMDisplay();
                 postRequestProcessor(rID, subEv);
                 break;
             case 'Scenarios':
@@ -1509,10 +1532,12 @@ var scManager = (function(){
         if (eventsCompleted === Object.keys(eventObj.subEvents[eventObj.stage]).length){
             (eventObj.stage)++;
 
-            if (eventObj.stage <= eventObj.subEvents.length){
-                requestHandler(rID);
-            } else {
+            consoleLog('postReqProc', ['sub-Ev: ' + subEv], eventObj, 'warn');
+
+            if (eventObj.stage >= eventObj.subEvents.length){
                 delete smState.eventRequests[rID];
+            } else {
+                requestHandler(rID);
             }
         }
     }
@@ -2027,6 +2052,8 @@ var scManager = (function(){
             index = 0,
             thisOption;
 
+        dimensionDDLEventsHandler('unbind');
+
         for (key in DD_ON_LOAD){
             if (DD_ON_LOAD.hasOwnProperty(key)){
                 clearChildSelect(DD_ON_LOAD[key].selectID); // reset dropdowns first
@@ -2046,6 +2073,10 @@ var scManager = (function(){
         cb(requestID, subEvent);
     }
 
+    function hideActsAndAss(){
+        $J('#smEntities').hide();
+    }
+
     function collapseActualsAndAssumptions() {
         $J('#smEntities table').toggle();
         $J('#smEntities p').click(function() {
@@ -2056,6 +2087,11 @@ var scManager = (function(){
             $J(this).closest('table').toggle();
             $J(this).closest('.sectContainer').find('p.sectTitle').toggle();
         });
+        $J('#smEntities').show();
+    }
+
+    function resetSMDisplay() {
+        $J('#select-toggle-btn').trigger('click');
     }
 
     function repositionVarSelect(divID) {
@@ -2173,54 +2209,56 @@ var scManager = (function(){
         });
     }
 
-    function dimensionDDLEventsHandler(){
+    function dimensionDDLEventsHandler(cmd){
         var thisDDL = $J('.dimensionDD'),
             thisRowLabel = $J('.dimRowLabel');
 
-        thisDDL.unbind('click').unbind('change');
-        thisRowLabel.unbind('click');
+        if (cmd === 'unbind') {
+            thisDDL.unbind('click').unbind('change');
+            thisRowLabel.unbind('click');
+        } else {
+            thisRowLabel.click(function() {
+                var thisRowLabel = $J(this),
+                    divToShow,
+                    containerToShow;
 
-        thisRowLabel.click(function() {
-            var thisRowLabel = $J(this),
-                divToShow,
-                containerToShow;
+                $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // clear hover styling from all row labels
+                thisRowLabel.addClass('dimRowLabelFocus'); // add hover styling to THIS row label
+                expandedSM(true);
+                $J('#smFilters').addClass('dimRowDropdownsFocus'); // add gray background, appears to apply to dropdowns column only
+                $J('.varSelect').addClass('hidden'); // hide all dropdowns
+                divToShow = thisRowLabel.attr('dimid'); // show dropdown for label being hovered over
+                containerToShow = thisRowLabel.attr('ddid');
+                divToShow = formatStringSpace(divToShow);
+                $J('#' + divToShow).removeClass('hidden');
+                $J('#' + containerToShow + '-container').removeClass('hidden');
+                repositionVarSelect(divToShow);
+            });
 
-            $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // clear hover styling from all row labels
-            thisRowLabel.addClass('dimRowLabelFocus'); // add hover styling to THIS row label
-            expandedSM(true);
-            $J('#smFilters').addClass('dimRowDropdownsFocus'); // add gray background, appears to apply to dropdowns column only
-            $J('.varSelect').addClass('hidden'); // hide all dropdowns
-            divToShow = thisRowLabel.attr('dimid'); // show dropdown for label being hovered over
-            containerToShow = thisRowLabel.attr('ddid');
-            divToShow = formatStringSpace(divToShow);
-            $J('#' + divToShow).removeClass('hidden');
-            $J('#' + containerToShow + '-container').removeClass('hidden');
-            repositionVarSelect(divToShow);
-        });
+            $J('#smFilters').on('click', '.select2-selection__rendered', function() {
+                var thisSelID = $J(this).closest('div').find('select').attr('id'),
+                    hasDepends = thisSelID + '-' + formatStringChars($J(this).text()),
+                    subSelectID;
 
-        $J('#smFilters').on('click', '.select2-selection__rendered', function() {
-            var thisSelID = $J(this).closest('div').find('select').attr('id'),
-                hasDepends = thisSelID + '-' + formatStringChars($J(this).text()),
-                subSelectID;
-
-            if (hasDepends in dependSelects) {
-                subSelectID = dependSelects[hasDepends];
-                if (!$J('#' + subSelectID + '-container').hasClass('hidden')) {
-                    wasSelectedVal[thisSelID] = subSelectID;
+                if (hasDepends in dependSelects) {
+                    subSelectID = dependSelects[hasDepends];
+                    if (!$J('#' + subSelectID + '-container').hasClass('hidden')) {
+                        wasSelectedVal[thisSelID] = subSelectID;
+                    }
                 }
-            }
-        });
+            });
 
-        thisDDL.change(function(){
-            var thisSelect = $J(this),
-                extrasObj = {};
+            thisDDL.change(function(){
+                var thisSelect = $J(this),
+                    extrasObj = {};
 
-            extrasObj.thisSelect = thisSelect;
-            extrasObj.thisSelectVal = thisSelect.val();
-            extrasObj.thisSelectID = thisSelect.attr('id');
-            extrasObj.thisDefaultOpt = thisSelect.find('option:first').text();
-            init('selectDimension', extrasObj);
-        });
+                extrasObj.thisSelect = thisSelect;
+                extrasObj.thisSelectVal = thisSelect.val();
+                extrasObj.thisSelectID = thisSelect.attr('id');
+                extrasObj.thisDefaultOpt = thisSelect.find('option:first').text();
+                init('selectDimension', extrasObj);
+            });
+        }
     }
 
     function assumptionDDLClickHandler(){
