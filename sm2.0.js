@@ -840,8 +840,8 @@ var scManager = (function(){
         es.get("TM1SubsetMembers", params, onSuccess, onFailure, true);
     }
 
-    function createNewScenario(exObject, cb, requestID, subEvent) {
-        var params = { "p_element": exObject.ScenarioName }, // web method: ScenarioElementInsert?p_element=newScenarioNameStr
+    function createNewScenario(cb, requestID, subEvent) {
+        var params = { "p_element": smState.eventRequests[requestID].extras.ScenarioName }, // web method: ScenarioElementInsert?p_element=newScenarioNameStr
             onSuccess,
             onFailure,
             newParamsObj = {};
@@ -863,13 +863,13 @@ var scManager = (function(){
             };
 
             smState.loadFailures.createNewScenario = 0;
-            newParamsObj[SAVED_SCENARIO_KEY] = exObject.ScenarioName;
+            newParamsObj[SAVED_SCENARIO_KEY] = smState.eventRequests[requestID].extras.ScenarioName;
             addParamsToUrl(newParamsObj);
 
             modalMsg('erase');
             modalMsg('success', {
                 title: 'Success',
-                message: 'Scenario "' + exObject.ScenarioName + '" was created.',
+                message: 'Scenario "' + smState.eventRequests[requestID].extras.ScenarioName + '" was created.',
                 spinner: false,
                 confirm: {
                     msg: 'Ok',
@@ -881,12 +881,12 @@ var scManager = (function(){
 
         onFailure = function(){
             var recursiveCall = function(){
-                createNewScenario(exObject, cb, requestID, subEvent);
+                createNewScenario(cb, requestID, subEvent);
             };
 
             if (smState.loadFailures.createNewScenario < MAX_FAILS){
                 (smState.loadFailures.createNewScenario)++;
-                createNewScenario(exObject, cb, requestID, subEvent);
+                createNewScenario(cb, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -906,7 +906,7 @@ var scManager = (function(){
         es.get("ScenarioElementInsert", params, onSuccess, onFailure, false, "json", 120000, "There is still no response from the server. Do you want to abort the request?", 120000);
     }
 
-    function isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent){
+    function isScenarioNameUnique(cb, cb2, requestID, subEvent){
         var params = { "DimName": "Scenario" }, // web method: TM1DimensionMembers?DimName=Scenario
             testPassed = true,
             onSuccess,
@@ -917,7 +917,7 @@ var scManager = (function(){
         onSuccess = function(resultObj) {
             smState.loadFailures.isScenarioNameUnique = 0;
             resultObj.Results.Members.forEach(function(value) {
-                if (value.Name === exObject.ScenarioName) {
+                if (value.Name === smState.eventRequests[requestID].extras.ScenarioName) {
                     modalMsg('erase');
                     modalMsg('error', {
                         title: 'Sorry!',
@@ -934,18 +934,18 @@ var scManager = (function(){
             });
 
             if (testPassed){
-                cb(exObject, cb2, requestID, subEvent);
+                cb(cb2, requestID, subEvent);
             }
         };
 
         onFailure = function(){
             var recursiveCall = function(){
-                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
+                isScenarioNameUnique(cb, cb2, requestID, subEvent);
             };
 
             if (smState.loadFailures.isScenarioNameUnique < MAX_FAILS){
                 (smState.loadFailures.isScenarioNameUnique)++;
-                isScenarioNameUnique(exObject, cb, cb2, requestID, subEvent);
+                isScenarioNameUnique(cb, cb2, requestID, subEvent);
             } else {
                 modalMsg('erase');
                 modalMsg('error', {
@@ -1055,34 +1055,34 @@ var scManager = (function(){
         });
     }
 
-    function selectScenario(exObject){
+    function selectScenario(requestID){
         var newParamsObj = {};
 
-        newParamsObj[SAVED_SCENARIO_KEY] = exObject.thisSelectVal;
+        newParamsObj[SAVED_SCENARIO_KEY] = smState.eventRequests[requestID].extras.thisSelectVal;
         addParamsToUrl(newParamsObj);
     }
 
-    function selectDimension(exObject){
+    function selectDimension(requestID){
         var parentDivID,
             setTo,
             formattedVal,
             hasChildSel;
 
         // if current select has an option previously selected, clear children of previous option
-        if (exObject.thisSelectID in wasSelectedVal) {
-            clearChildSelect(wasSelectedVal[exObject.thisSelectID]);
+        if (smState.eventRequests[requestID].extras.thisSelectID in wasSelectedVal) {
+            clearChildSelect(wasSelectedVal[smState.eventRequests[requestID].extras.thisSelectID]);
         }
 
         // set dimRowOptSelected text to most current selection
-        parentDivID = exObject.thisSelect.closest('.varSelect').attr('id');
-        setTo = exObject.thisSelectVal === '' ? exObject.thisDefaultOpt : exObject.thisSelectVal;
+        parentDivID = smState.eventRequests[requestID].extras.thisSelect.closest('.varSelect').attr('id');
+        setTo = smState.eventRequests[requestID].extras.thisSelectVal === '' ? smState.eventRequests[requestID].extras.thisDefaultOpt : smState.eventRequests[requestID].extras.thisSelectVal;
         if (setTo !== DEF_CHILD_OPT_NAME) {
             $J('.dimRowLabel[dimid="' + parentDivID + '"]').text(setTo);
         }
 
         // check to see if this select has any dependencies, display child
-        formattedVal = isDefinedAndTrue(exObject.thisSelectVal) ? formatStringChars(exObject.thisSelectVal) : exObject.thisSelectVal;
-        hasChildSel = exObject.thisSelectID + formattedVal + '-container';
+        formattedVal = isDefinedAndTrue(smState.eventRequests[requestID].extras.thisSelectVal) ? formatStringChars(smState.eventRequests[requestID].extras.thisSelectVal) : smState.eventRequests[requestID].extras.thisSelectVal;
+        hasChildSel = smState.eventRequests[requestID].extras.thisSelectID + formattedVal + '-container';
         if ($J('#' + hasChildSel).length) {
             $J('#' + hasChildSel).removeClass('hidden');
         }
@@ -1257,9 +1257,10 @@ var scManager = (function(){
 
     /** Request Handling **/
 
-    function requestBuilder(event){
+    function requestBuilder(event, extrasObject){
         var tStamp = Date.now(),
             requestObj = {
+                extras: extrasObject,
                 event: event,
                 stage: 0
             };
@@ -1295,6 +1296,9 @@ var scManager = (function(){
                 break;
             case 'createScenario':
                 requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
                     {
                         CreateScenario: false
                     },
@@ -1400,7 +1404,7 @@ var scManager = (function(){
         return tStamp;
     }
 
-    function requestRouter(rID, subEv, extrasObj){
+    function requestRouter(rID, subEv){
         var urlParams;
 
         /**
@@ -1434,7 +1438,7 @@ var scManager = (function(){
                 collapseActualsAndAssumptions();
                 break;
             case 'CreateScenario':
-                isScenarioNameUnique(extrasObj, createNewScenario, postRequestProcessor, rID, subEv);
+                isScenarioNameUnique(createNewScenario, postRequestProcessor, rID, subEv);
                 break;
             case 'DeleteScenario':
                 deleteScenario(postRequestProcessor, rID, subEv);
@@ -1456,12 +1460,12 @@ var scManager = (function(){
                 saveAssumptions(postRequestProcessor, rID, subEv);
                 break;
             case 'SelectDimension':
-                selectDimension(extrasObj);
+                selectDimension(rID);
                 updateSMDimensionVals();
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SelectScenario':
-                selectScenario(extrasObj, postRequestProcessor, rID, subEv);
+                selectScenario(rID);
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SetEventListeners':
@@ -1513,12 +1517,12 @@ var scManager = (function(){
         }
     }
 
-    function requestHandler(rID, eObj){
+    function requestHandler(rID){
         var eventObj = smState.eventRequests[rID];
 
         for (var anEvent in eventObj.subEvents[eventObj.stage]){
             if (eventObj.subEvents[eventObj.stage].hasOwnProperty(anEvent)){
-                requestRouter(rID, anEvent, eObj);
+                requestRouter(rID, anEvent);
             }
         }
     }
@@ -2249,94 +2253,8 @@ var scManager = (function(){
     }
 
     function generalSMEventsHandler(){
-        /* TODO: delete
-        // disable Assumptions dropdowns if Actual ("default") Scenario selected
-        $J('#smEntities').on('click', '.select2-selection', function() {
-            if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
-                modalMsg('erase');
-                modalMsg('error', {
-                    title: 'Choose Another Scenario',
-                    message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
-                    spinner: false,
-                    confirm: {
-                        msg: 'Ok',
-                        funcs: []
-                    },
-                    deny: {}
-                });
-            }
-        });*/
-
-        /* TODO: delete
-        // save currently selected sub-select value if sub-select is active
-        $J('#smFilters').on('click', '.select2-selection__rendered', function() {
-            var thisSelID = $J(this).closest('div').find('select').attr('id'),
-                hasDepends = thisSelID + '-' + formatStringChars($J(this).text()),
-                subSelectID;
-
-            if (hasDepends in dependSelects) {
-                subSelectID = dependSelects[hasDepends];
-                if (!$J('#' + subSelectID + '-container').hasClass('hidden')) {
-                    wasSelectedVal[thisSelID] = subSelectID;
-                }
-            }
-        });*/
-
-        /* TODO: delete
-        // MAIN: handles all dropdown selections events
-        $J('#sm').on('change', 'select', function(event, selectVal) {
-            var thisSelect = $J(this),
-                thisSelectVal = isDefinedAndTrue(selectVal) ? selectVal : thisSelect.val(),
-                thisSelectID = thisSelect.attr('id'),
-                thisDefaultOpt = thisSelect.find('option:first').text(),
-                extrasObj = {};
-
-            /!** Case: Scenario select change **!/
-            if (thisSelectID === "curScenarioSel") {
-                /!* TODO: delete
-                extrasObj.thisSelectVal = thisSelectVal;
-                init('selectScenario', extrasObj);*!/
-            }
-            else {
-                /!** Case: Dimensions selects change **!/
-                if (thisSelect.closest('section').attr('id') === 'smFilters') {
-                    /!* TODO: delete
-                    extrasObj.thisSelect = thisSelect;
-                    extrasObj.thisSelectVal = thisSelectVal;
-                    extrasObj.thisSelectID = thisSelectID;
-                    extrasObj.thisDefaultOpt = thisDefaultOpt;
-                    init('selectDimension', extrasObj);*!/
-                }
-                /!** Case: Assumptions selects change **!/
-                else {
-                    /!* TODO: delete
-                    init('selectAssumption');*!/
-                }
-            }
-        });*/
-
-        /* TODO: delete
-        // Dimension label click, display all related elements
-        $J('#dimRowLabels').on('click', '.dimRowLabel', function() {
-            var thisRowLabel = $J(this),
-                divToShow,
-                containerToShow;
-
-            $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // clear hover styling from all row labels
-            thisRowLabel.addClass('dimRowLabelFocus'); // add hover styling to THIS row label
-            expandedSM(true);
-            $J('#smFilters').addClass('dimRowDropdownsFocus'); // add gray background, appears to apply to dropdowns column only
-            $J('.varSelect').addClass('hidden'); // hide all dropdowns
-            divToShow = thisRowLabel.attr('dimid'); // show dropdown for label being hovered over
-            containerToShow = thisRowLabel.attr('ddid');
-            divToShow = formatStringSpace(divToShow);
-            $J('#' + divToShow).removeClass('hidden');
-            $J('#' + containerToShow + '-container').removeClass('hidden');
-            repositionVarSelect(divToShow);
-        });*/
-
         // onMouseLeave, clear Dimension and related elements
-        $J('#smFilters').mouseleave(function() {
+        function dimOriginalState(){
             setTimeout(function() {
                 if (!onSelect2) {
                     $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // remove hover styling to row labels
@@ -2344,7 +2262,10 @@ var scManager = (function(){
                     $J('.varSelect').addClass('hidden'); // hide all dropdowns
                     expandedSM(false);
                 }
-            }, 100);
+            }, 200);
+        }
+        $J('#smFilters').mouseleave(function() {
+            dimOriginalState();
         });
 
         // prevent #smFilters.mouseleave from executing
@@ -2355,10 +2276,11 @@ var scManager = (function(){
         // undo onMouseEnter above
         $J('body').on('mouseleave : focusout', '.select2-dropdown', function() {
             onSelect2 = false;
+            dimOriginalState();
         });
 
         // closes select2 dropdown without the need for a click outside of the element
-        $J('#sm').on('mouseenter', '#smFilters', function() {
+        $J('body').on('mouseenter', '#sm', function() {
             $J('.dimensionDD').each(function() {
                 $J(this).select2("close");
             });
@@ -2368,8 +2290,8 @@ var scManager = (function(){
     /** Ante Up **/
 
     function init(event, extrasObject){
-        var requestID = requestBuilder(event);
-        requestHandler(requestID, extrasObject);
+        var requestID = requestBuilder(event, extrasObject);
+        requestHandler(requestID);
     }
 
     return {
