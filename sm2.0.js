@@ -203,6 +203,18 @@ var scManager = (function(){
 
     /** Helpers **/
 
+    function filterSMVals(paramsToAvoid){
+        var newVals = $J.extend(true, {}, smState.smVals),
+            arrLen = paramsToAvoid.length,
+            i;
+
+        for (i = 0; i < arrLen; i++){
+            delete newVals[paramsToAvoid[i]];
+        }
+
+        return newVals;
+    }
+
     function modalMsg(msgType, msgItem){
         // msgType(s): 'status', 'success', 'error', 'erase'
         var fontColor,
@@ -794,30 +806,54 @@ var scManager = (function(){
     }
 
     function applySelect2(applyToDDs) {
-        applyToDDs.forEach(function(value) {
-            switch (value) {
-                case 'scenario':
-                    $J('.scenarioDD').select2({
-                        placeholder: 'Load a scenario..'
+        switch (applyToDDs) {
+            case 'scenario':
+                $J('.scenarioDD').select2({
+                    placeholder: 'Load a scenario..'
+                });
+                break;
+            case 'dimensions':
+                $J('.dimensionDD').select2();
+                break;
+            case 'assumptions':
+                function matchStart(term, text) {
+                    return text.toUpperCase().indexOf(term.toUpperCase()) === 0;
+                }
+                $J.fn.select2.amd.require(['select2/compat/matcher'], function(oldMatcher) {
+                    $J('.varPercent').select2({
+                        matcher: oldMatcher(matchStart)
                     });
-                    break;
-                case 'dimensions':
-                    $J('.dimensionDD').select2();
-                    break;
-                case 'assumptions':
-                    function matchStart(term, text) {
-                        return text.toUpperCase().indexOf(term.toUpperCase()) === 0;
-                    }
-                    $J.fn.select2.amd.require(['select2/compat/matcher'], function(oldMatcher) {
-                        $J('.varPercent').select2({
-                            matcher: oldMatcher(matchStart)
-                        });
-                    });
-                    break;
-                default:
+                });
+                break;
+            default:
                 // do nothing
-            }
-        });
+        }
+    }
+
+    function destroySelect2(applyToDDs){
+        switch(applyToDDs){
+            case 'scenario':
+                if ($J('#scenarioContainer').find('.select2').length){
+                    $J('.scenarioDD').select2('destroy');
+                }
+                break;
+            case 'dimensions':
+                if ($J('#dimRowDropdowns').find('.select2').length){
+                    $J('.dimensionDD').each(function(){
+                        $J(this).select2('destroy');
+                    });
+                }
+                break;
+            case 'assumptions':
+                if ($J('.assumptionVal').find('.select2').length){
+                    $J('.varPercent').each(function(){
+                        $J(this).select2('destroy');
+                    });
+                }
+                break;
+            default:
+                // do nothing
+        }
     }
 
     function getTM1CurrentYear() {
@@ -1063,27 +1099,30 @@ var scManager = (function(){
         addParamsToUrl(newParamsObj);
     }
 
-    function selectDimension(requestID){
-        var parentDivID,
+    function selectDimension(requestID, directDeliveryObj){
+        var ddO,
+            parentDivID,
             setTo,
             formattedVal,
             hasChildSel;
 
+        ddO = directDeliveryObj ? directDeliveryObj : smState.eventRequests[requestID].extras;
+
         // if current select has an option previously selected, clear children of previous option
-        if (smState.eventRequests[requestID].extras.thisSelectID in wasSelectedVal) {
-            clearChildSelect(wasSelectedVal[smState.eventRequests[requestID].extras.thisSelectID]);
+        if (ddO.thisSelectID in wasSelectedVal) {
+            clearChildSelect(wasSelectedVal[ddO.thisSelectID]);
         }
 
         // set dimRowOptSelected text to most current selection
-        parentDivID = smState.eventRequests[requestID].extras.thisSelect.closest('.varSelect').attr('id');
-        setTo = smState.eventRequests[requestID].extras.thisSelectVal === '' ? smState.eventRequests[requestID].extras.thisDefaultOpt : smState.eventRequests[requestID].extras.thisSelectVal;
+        parentDivID = ddO.thisSelect.closest('.varSelect').attr('id');
+        setTo = ddO.thisSelectVal === '' ? ddO.thisDefaultOpt : ddO.thisSelectVal;
         if (setTo !== DEF_CHILD_OPT_NAME) {
             $J('.dimRowLabel[dimid="' + parentDivID + '"]').text(setTo);
         }
 
         // check to see if this select has any dependencies, display child
-        formattedVal = isDefinedAndTrue(smState.eventRequests[requestID].extras.thisSelectVal) ? formatStringChars(smState.eventRequests[requestID].extras.thisSelectVal) : smState.eventRequests[requestID].extras.thisSelectVal;
-        hasChildSel = smState.eventRequests[requestID].extras.thisSelectID + formattedVal + '-container';
+        formattedVal = isDefinedAndTrue(ddO.thisSelectVal) ? formatStringChars(ddO.thisSelectVal) : ddO.thisSelectVal;
+        hasChildSel = ddO.thisSelectID + formattedVal + '-container';
         if ($J('#' + hasChildSel).length) {
             $J('#' + hasChildSel).removeClass('hidden');
         }
@@ -1128,7 +1167,7 @@ var scManager = (function(){
                         dimRows.SelectedRegion = smState.smVals.Region ? smState.smVals.Region : DD_ON_LOAD.Region.resultsMembersID;
                         break;
                     case 'SelectedWorkforceCategory':
-                        dimRows.SelectedWorkforceCategory = smState.smVals.WorkforceCategory ? smState.smVals.WorkforceCategory : DD_ON_LOAD.workforceCategory.resultsMembersID;
+                        dimRows.SelectedWorkforceCategory = smState.smVals.WorkforceCategory ? smState.smVals.WorkforceCategory : DD_ON_LOAD.WorkforceCategory.resultsMembersID;
                         break;
                     case 'SelectedWorkerType':
                         dimRows.SelectedWorkerType = smState.smVals.WorkerType ? smState.smVals.WorkerType : DD_ON_LOAD.WorkerType.resultsMembersID;
@@ -1147,11 +1186,6 @@ var scManager = (function(){
                 }
             }
         }
-        /*
-         TODO: Test this func without the following assignment. I don't think that it is needed.
-         object should be passed by reference
-         localDimResults.RowSet.Rows[0] = dimRows;
-         */
 
         smState.loadFailures.saveDimensionSelections = smState.loadFailures.saveDimensionSelections || 0;
 
@@ -1768,7 +1802,7 @@ var scManager = (function(){
             }
         };
 
-        es.get(webMethod, smState.smVals, onSuccess, onFailure, true);
+        es.get(webMethod, filterSMVals(['Scenario']), onSuccess, onFailure, true);
     }
 
     function loadAssumptions(cb, cb2, requestID, subEvent) {
@@ -1827,6 +1861,7 @@ var scManager = (function(){
             optionStr = '',
             selectedValue;
 
+        destroySelect2('scenario');
         selectCurrScenario.empty();
         smState.ScenarioNames.forEach(function(value) {
             optionStr = '<option value="' + value + '"';
@@ -1846,7 +1881,7 @@ var scManager = (function(){
         }*/
 
         scenarioDDLEventsHandler();
-        applySelect2(['scenario']);
+        applySelect2('scenario');
 
         cb(requestID, subEvent);
     }
@@ -1921,8 +1956,6 @@ var scManager = (function(){
             }
         }
 
-        applySelect2(['dimensions']);
-
         cb(requestID, subEvent);
     }
 
@@ -1960,6 +1993,7 @@ var scManager = (function(){
             arrAssVal;
 
         actualsExist = $J('#smEntities .actualVal').first().text() !== '' ? $J('#smEntities .actualVal') : null;
+        destroySelect2('assumptions');
         $J('#smEntities').empty();
 
         newSectionTitle = '';
@@ -1982,8 +2016,8 @@ var scManager = (function(){
             i++;
         }
 
+        applySelect2('assumptions');
         assumptionDDLClickHandler();
-        applySelect2(['assumptions']);
 
         cb(requestID, subEvent);
     }
@@ -2013,7 +2047,8 @@ var scManager = (function(){
         var thisClosestSelect = selectedOption.closest('select'),
             thisParID = thisClosestSelect.attr('parid'),
             curSelectOpt,
-            containerDivID;
+            containerDivID,
+            extrasObj = {};
 
         if (thisParID !== '') {
             for (var key in dependSelects) {
@@ -2038,9 +2073,17 @@ var scManager = (function(){
             curSelectOpt.removeAttr('selected'); // clear current "selected"
             selectedOption.attr('selected', 'selected'); // set new "selected" option
 
+            extrasObj.thisSelect = thisClosestSelect;
+            extrasObj.thisSelectVal = thisClosestSelect.val();
+            extrasObj.thisSelectID = thisClosestSelect.attr('id');
+            extrasObj.thisDefaultOpt = thisClosestSelect.find('option:first').text();
+
+            selectDimension(null, extrasObj);
+
+            /* TODO: delete
             // trigger change so that it registers with select2
             thisClosestSelect.val(selectedOption.text()).trigger('change', selectedOption.text());
-            thisClosestSelect.next().find('.select2-selection__rendered').text(selectedOption.text());
+            thisClosestSelect.next().find('.select2-selection__rendered').text(selectedOption.text());*/
         }
         containerDivID = thisClosestSelect.attr('id');
         $J('#' + containerDivID + '-container').removeClass('hidden'); // show container div
@@ -2052,6 +2095,7 @@ var scManager = (function(){
             index = 0,
             thisOption;
 
+        destroySelect2('dimensions');
         dimensionDDLEventsHandler('unbind');
 
         for (key in DD_ON_LOAD){
@@ -2068,6 +2112,7 @@ var scManager = (function(){
             }
         }
 
+        applySelect2('dimensions');
         dimensionDDLEventsHandler();
         updateSMDimensionVals();
         cb(requestID, subEvent);
@@ -2211,13 +2256,13 @@ var scManager = (function(){
 
     function dimensionDDLEventsHandler(cmd){
         var thisDDL = $J('.dimensionDD'),
-            thisRowLabel = $J('.dimRowLabel');
+            thisRowLabels = $J('.dimRowLabel');
 
         if (cmd === 'unbind') {
             thisDDL.unbind('click').unbind('change');
-            thisRowLabel.unbind('click');
+            thisRowLabels.unbind('click');
         } else {
-            thisRowLabel.click(function() {
+            thisRowLabels.click(function() {
                 var thisRowLabel = $J(this),
                     divToShow,
                     containerToShow;
@@ -2291,7 +2336,6 @@ var scManager = (function(){
     }
 
     function generalSMEventsHandler(){
-        // onMouseLeave, clear Dimension and related elements
         function dimOriginalState(){
             setTimeout(function() {
                 if (!onSelect2) {
@@ -2302,6 +2346,8 @@ var scManager = (function(){
                 }
             }, 200);
         }
+
+        // onMouseLeave, clear Dimension and related elements
         $J('#smFilters').mouseleave(function() {
             dimOriginalState();
         });
@@ -2314,7 +2360,6 @@ var scManager = (function(){
         // undo onMouseEnter above
         $J('body').on('mouseleave : focusout', '.select2-dropdown', function() {
             onSelect2 = false;
-            dimOriginalState();
         });
 
         // closes select2 dropdown without the need for a click outside of the element
