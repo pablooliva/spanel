@@ -36,7 +36,7 @@ var scManager = (function(){
             DimensionsSelections: [],
             loadFailures: {} // counts data load attempt failures, keys by function name
         },
-        MAX_FAILS = 3, // user prompted when max is hit
+        MAX_FAILS = 3, // user prompted when max is reached
         DEFAULT_SCENARIO_NAME = 'Actual', // value for default option of Scenario dropdown
         SAVED_SCENARIO_KEY = 'sasc', // key for URL param designating which Scenario is active
         DEF_CHILD_OPT_NAME = "More specifically...", // value for default option of Dimension child dropdowns
@@ -488,7 +488,7 @@ var scManager = (function(){
                     thisSel = $J('#' + obj);
                     thisSel.find('option:selected').removeAttr('selected');
                     thisSel.find('option:first').attr('selected', 'selected');
-                    thisSel.val($J('#' + obj + 'option:first').val()).trigger('change');
+                    //thisSel.val($J('#' + obj + 'option:first').val()).trigger('change', false);
                     $J('#' + obj + '-container').addClass('hidden');
                 }
             }
@@ -1107,6 +1107,9 @@ var scManager = (function(){
             hasChildSel;
 
         ddO = directDeliveryObj ? directDeliveryObj : smState.eventRequests[requestID].extras;
+
+        /*consoleLog('selectDimension', ['pre'], ddO, 'warn');
+        debugger;*/
 
         // if current select has an option previously selected, clear children of previous option
         if (ddO.thisSelectID in wasSelectedVal) {
@@ -1920,7 +1923,6 @@ var scManager = (function(){
                 // add dependency of selects to dependSelects object
                 selIdOptVal = obj.selectID + '-' + formatStringChars(valueToAdd);
                 dependSelects[selIdOptVal] = childObj.selectID;
-                // let's do it again, same for child as parent
                 iterateDimChildren(hasChildren, childObj, parID, isPeriodChildAttr);
             }
         });
@@ -2070,8 +2072,9 @@ var scManager = (function(){
         }
         curSelectOpt = thisClosestSelect.find('option:selected');
         if (curSelectOpt.text() !== selectedOption.text()) {
-            curSelectOpt.removeAttr('selected'); // clear current "selected"
-            selectedOption.attr('selected', 'selected'); // set new "selected" option
+            curSelectOpt.removeAttr('selected');
+            selectedOption.attr('selected', 'selected');
+            thisClosestSelect.val(selectedOption.val());
 
             extrasObj.thisSelect = thisClosestSelect;
             extrasObj.thisSelectVal = thisClosestSelect.val();
@@ -2079,11 +2082,6 @@ var scManager = (function(){
             extrasObj.thisDefaultOpt = thisClosestSelect.find('option:first').text();
 
             selectDimension(null, extrasObj);
-
-            /* TODO: delete
-            // trigger change so that it registers with select2
-            thisClosestSelect.val(selectedOption.text()).trigger('change', selectedOption.text());
-            thisClosestSelect.next().find('.select2-selection__rendered').text(selectedOption.text());*/
         }
         containerDivID = thisClosestSelect.attr('id');
         $J('#' + containerDivID + '-container').removeClass('hidden'); // show container div
@@ -2204,14 +2202,17 @@ var scManager = (function(){
 
         // *** Create Scenario ***
         // ***********************
+        nameInput = $J('#create-scenario-name');
+
         $J('#create-toggle-btn').click(function() {
             $J('#smFilters').hide();
             $J('#smEntities').hide();
             $J('#cur-scenario-tab').hide();
             $J('#new-scenario-tab').show();
+            nameInput.val('');
+            nameInput.focus();
         });
 
-        nameInput = $J('#create-scenario-name');
         nameInput.click(function() {
             nameInput.val(defVal).css('color', '#000');
             if (nameInput.val() === defVal || nameInput.val() === errorVal) {
@@ -2293,15 +2294,17 @@ var scManager = (function(){
                 }
             });
 
-            thisDDL.change(function(){
+            thisDDL.change(function(initEvent){
                 var thisSelect = $J(this),
                     extrasObj = {};
 
-                extrasObj.thisSelect = thisSelect;
-                extrasObj.thisSelectVal = thisSelect.val();
-                extrasObj.thisSelectID = thisSelect.attr('id');
-                extrasObj.thisDefaultOpt = thisSelect.find('option:first').text();
-                init('selectDimension', extrasObj);
+                if (initEvent !== false){
+                    extrasObj.thisSelect = thisSelect;
+                    extrasObj.thisSelectVal = thisSelect.val();
+                    extrasObj.thisSelectID = thisSelect.attr('id');
+                    extrasObj.thisDefaultOpt = thisSelect.find('option:first').text();
+                    init('selectDimension', extrasObj);
+                }
             });
         }
     }
