@@ -203,6 +203,60 @@ var scManager = (function(){
 
     /** Helpers **/
 
+    function setPageToScenario(){
+        var urlParams;
+
+        if (window.location.search === '') {
+            setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
+        } else {
+            urlParams = getQueryParams(window.location.search);
+            if (SAVED_SCENARIO_KEY in urlParams) {
+                setScenarioStateAndUrl(urlParams[SAVED_SCENARIO_KEY]);
+            } else {
+                setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
+            }
+        }
+    }
+
+    function resetPageScenarioToDefault(scName, cb){
+        modalMsg('erase');
+        modalMsg('error', {
+            title: 'Scenario Does Not Exist',
+            message: 'An attempt was made to pull up a Scenario saved under the name "' + scName + '." Unfortunately, this Scenario no longer exists. We have reverted to the default Scenario, "' + DEFAULT_SCENARIO_NAME + '."',
+            spinner: false,
+            confirm: {
+                msg: 'Ok',
+                funcs: [cb]
+            },
+            deny: {}
+        });
+
+        setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
+    }
+
+    function testPageScenario(cb, cb2, requestID, subEvent){
+        var pageScenarioExists = false,
+            scenarioName = smState.smVals.Scenario,
+            continueRequest;
+
+        smState.ScenarioNames.forEach(function (value){
+            if (scenarioName === value){
+                pageScenarioExists = true;
+            }
+        });
+
+        if (pageScenarioExists){
+            cb(cb2, requestID, subEvent);
+        } else {
+            continueRequest = function(){
+                processingMsg();
+                cb(cb2, requestID, subEvent);
+            };
+
+            resetPageScenarioToDefault(scenarioName, continueRequest);
+        }
+    }
+
     function filterSMVals(paramsToAvoid){
         var newVals = $J.extend(true, {}, smState.smVals),
             arrLen = paramsToAvoid.length,
@@ -1456,8 +1510,6 @@ var scManager = (function(){
     }
 
     function requestRouter(rID, subEv){
-        var urlParams;
-
         /**
         When a function uses async processes, then we need to use a
          callback function to call postRequestProcessor.
@@ -1535,16 +1587,7 @@ var scManager = (function(){
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SetPageScenario':
-                if (window.location.search === '') {
-                    setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
-                } else {
-                    urlParams = getQueryParams(window.location.search);
-                    if (SAVED_SCENARIO_KEY in urlParams) {
-                        setScenarioStateAndUrl(urlParams[SAVED_SCENARIO_KEY]);
-                    } else {
-                        setScenarioStateAndUrl(DEFAULT_SCENARIO_NAME);
-                    }
-                }
+                setPageToScenario();
                 postRequestProcessor(rID, subEv);
                 break;
             default:
@@ -1611,7 +1654,7 @@ var scManager = (function(){
             });
             savedScenarioNames.sort();
             smState.ScenarioNames = savedScenarioNames;
-            cb(cb2, requestID, subEvent);
+            testPageScenario(cb, cb2, requestID, subEvent);
         };
 
         onFailure = function() {
