@@ -41,6 +41,7 @@ var scManager = (function(){
         SAVED_SCENARIO_KEY = 'sasc', // key for URL param designating which Scenario is active
         DEF_CHILD_OPT_NAME = "More specifically...", // value for default option of Dimension child dropdowns
         protectedScenarios = ['Benchmark', DEFAULT_SCENARIO_NAME], // prevent delete option for these
+        modalMsgs = [], // modal message queue container
         spinnerOpts = { // Spinner options
             lines: 11, // The number of lines to draw
             length: 10, // The length of each line
@@ -199,9 +200,137 @@ var scManager = (function(){
                 webMParamKey2: '',
                 webMParamVal2: ''
             }
-        };
+        },
+        applyModalMsg;
 
     /** Helpers **/
+
+    applyModalMsg = function(msgType, msgItem){
+        // msgType(s): 'status', 'success', 'error'
+        var fontColor,
+            overlayDiv = $J('#overlay'),
+            spinnerDiv = $J('#overlayLoading'),
+            spinner;
+
+        //setTimeout(function(){
+            fontColor = msgType === 'error' ? 'red' : 'green';
+            overlayDiv.find('.titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
+
+            if (msgItem.message) {
+                overlayDiv.find('.overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
+            }
+
+            if (msgItem.spinner) {
+                if (spinnerDiv.children().length === 0) {
+                    spinner = new Spinner(spinnerOpts).spin(document.getElementById('overlayLoading'));
+                }
+                spinnerDiv.show();
+            }
+
+            if (!$J.isEmptyObject(msgItem.confirm)) {
+                $J('#overlayConfirmBtn').show().html(msgItem.confirm.msg).click(function () {
+                    $J(this).unbind('click');
+                    deleteMsg();
+                    if (msgItem.confirm.funcs.length > 0) {
+                        msgItem.confirm.funcs.forEach(function (item) {
+                            item();
+                        });
+                    }
+                });
+            }
+
+            if (!$J.isEmptyObject(msgItem.deny)) {
+                $J('#overlayDenyBtn').show().html(msgItem.deny.msg).click(function () {
+                    $J(this).unbind('click');
+                    deleteMsg();
+                    if (msgItem.deny.funcs.length > 0) {
+                        msgItem.deny.funcs.forEach(function (item) {
+                            item();
+                        });
+                    }
+                });
+            }
+
+            overlayDiv.show();
+        //}, 0);
+    };
+
+    function processingMsg(){
+        pushMsg('status', {
+            title: 'SOLVE&trade; is Processing...',
+            message: '',
+            spinner: true,
+            confirm: {},
+            deny: {}
+        });
+    }
+
+    function failedToUpdateMsg(errorItemStr, cbFuncArr){
+        var cbArray = cbFuncArr && cbFuncArr.length ? cbFuncArr : [];
+
+        pushMsg('error', {
+            title: 'Sorry!',
+            message: errorItemStr + ' failed to update. Please try again.',
+            spinner: false,
+            confirm: {
+                msg: 'Try Again',
+                funcs: cbArray
+            },
+            deny: {}
+        });
+    }
+
+    function hideCurrentMsg(){
+        var overlayDiv = $J('#overlay'),
+            spinnerDiv = $J('#overlayLoading');
+
+        overlayDiv.find('p').each(function() {
+            $J(this).empty();
+        });
+        overlayDiv.find('button').each(function() {
+            $J(this).hide();
+        });
+        spinnerDiv.hide();
+    }
+
+    function pushMsg(mType, mItem){
+        var newLen,
+            arrIdx;
+
+        if (modalMsgs.length > 0){
+            hideCurrentMsg();
+        }
+        newLen = modalMsgs.push({mType: mType, mItem: mItem});
+        arrIdx = newLen - 1;
+        applyModalMsg(modalMsgs[arrIdx].mType, modalMsgs[arrIdx].mItem);
+    }
+
+    function deleteMsg(){
+        var arrIdx;
+
+        hideCurrentMsg();
+        modalMsgs.pop();
+        if (modalMsgs.length > 0){
+            arrIdx = modalMsgs.length - 1;
+            applyModalMsg(modalMsgs[arrIdx].mType, modalMsgs[arrIdx].mItem);
+        }
+    }
+
+    function clearAllMsgs(){
+        var overlayDiv = $J('#overlay'),
+            spinnerDiv = $J('#overlayLoading');
+
+        overlayDiv.find('p').each(function() {
+            $J(this).empty();
+        });
+        overlayDiv.find('button').each(function() {
+            $J(this).hide();
+        });
+        spinnerDiv.hide();
+        overlayDiv.hide();
+
+        modalMsgs.length = 0;
+    }
 
     function setPageToScenario(){
         var urlParams;
@@ -219,8 +348,7 @@ var scManager = (function(){
     }
 
     function resetPageScenarioToDefault(scName, cb){
-        modalMsg('erase');
-        modalMsg('error', {
+        pushMsg('error', {
             title: 'Scenario Does Not Exist',
             message: 'An attempt was made to pull up a Scenario saved under the name "' + scName + '." Unfortunately, this Scenario no longer exists. We have reverted to the default Scenario, "' + DEFAULT_SCENARIO_NAME + '."',
             spinner: false,
@@ -249,7 +377,6 @@ var scManager = (function(){
             cb(cb2, requestID, subEvent);
         } else {
             continueRequest = function(){
-                processingMsg();
                 cb(cb2, requestID, subEvent);
             };
 
@@ -267,92 +394,6 @@ var scManager = (function(){
         }
 
         return newVals;
-    }
-
-    function modalMsg(msgType, msgItem){
-        // msgType(s): 'status', 'success', 'error', 'erase'
-        var fontColor,
-            overlayDiv = $J('#overlay'),
-            spinnerDiv = $J('#overlayLoading'),
-            spinner;
-
-        if (typeof msgType !== 'undefined'){
-            setTimeout(function(){
-                fontColor = msgType === 'error' ? 'red' : 'green';
-                if (msgType === 'erase'){
-                    overlayDiv.find('p').each(function() {
-                        $J(this).empty();
-                    });
-                    overlayDiv.find('button').each(function() {
-                        $J(this).hide();
-                    });
-                    spinnerDiv.hide();
-                    overlayDiv.hide();
-                } else {
-                    if (msgItem instanceof Object){
-                        overlayDiv.find('.titleD').html('<span style="color:' + fontColor + '">' + msgItem.title + '</span>');
-                        if (msgItem.message) {
-                            overlayDiv.find('.overlayMsg').html('<span style="color:' + fontColor + '">' + msgItem.message + '</span>');
-                        }
-                        if (msgItem.spinner){
-                            if (spinnerDiv.children().length === 0){
-                                spinner = new Spinner(spinnerOpts).spin(document.getElementById('overlayLoading'));
-                            }
-                            spinnerDiv.show();
-                        }
-                        if (!$J.isEmptyObject(msgItem.confirm)){
-                            $J('#overlayConfirmBtn').show().html(msgItem.confirm.msg).click(function(){
-                                $J(this).unbind('click');
-                                modalMsg('erase');
-                                if (msgItem.confirm.funcs.length > 0){
-                                    msgItem.confirm.funcs.forEach(function(item){
-                                        item();
-                                    });
-                                }
-                            });
-
-                        }
-                        if (!$J.isEmptyObject(msgItem.deny)){
-                            $J('#overlayDenyBtn').show().html(msgItem.deny.msg).click(function(){
-                                $J(this).unbind('click');
-                                modalMsg('erase');
-                                if (msgItem.deny.funcs.length > 0){
-                                    msgItem.deny.funcs.forEach(function(item){
-                                        item();
-                                    });
-                                }
-                            });
-
-                        }
-                        overlayDiv.show();
-                    }
-                }
-            }, 0);
-        }
-    }
-
-    function processingMsg(){
-        modalMsg('status', {
-            title: 'SOLVE&trade; is Processing...',
-            message: '',
-            spinner: true,
-            confirm: {},
-            deny: {}
-        });
-    }
-
-    function failedToUpdateMsg(errorItemStr, cbFuncArr){
-        var cbArray = cbFuncArr && cbFuncArr.length ? cbFuncArr : [];
-        modalMsg('error', {
-            title: 'Sorry!',
-            message: errorItemStr + ' failed to update. Please try again.',
-            spinner: false,
-            confirm: {
-                msg: 'Try Again',
-                funcs: cbArray
-            },
-            deny: {}
-        });
     }
 
     function detectIE() {
@@ -937,8 +978,7 @@ var scManager = (function(){
 
         smState.loadFailures.createNewScenario = smState.loadFailures.createNewScenario || 0;
 
-        modalMsg('erase');
-        modalMsg('success', {
+        pushMsg('success', {
             title: 'Creating New Scenario',
             message: 'A new Scenario is being created. This may take a moment.',
             spinner: true,
@@ -948,7 +988,6 @@ var scManager = (function(){
 
         onSuccess = function() {
             var continueRequest = function(){
-                processingMsg();
                 cb(requestID, subEvent);
             };
 
@@ -956,8 +995,7 @@ var scManager = (function(){
             newParamsObj[SAVED_SCENARIO_KEY] = smState.eventRequests[requestID].extras.ScenarioName;
             addParamsToUrl(newParamsObj);
 
-            modalMsg('erase');
-            modalMsg('success', {
+            pushMsg('success', {
                 title: 'Success',
                 message: 'Scenario "' + smState.eventRequests[requestID].extras.ScenarioName + '" was created.',
                 spinner: false,
@@ -978,8 +1016,7 @@ var scManager = (function(){
                 (smState.loadFailures.createNewScenario)++;
                 createNewScenario(cb, requestID, subEvent);
             } else {
-                modalMsg('erase');
-                modalMsg('error', {
+                pushMsg('error', {
                     title: 'Sorry!',
                     message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
                     spinner: false,
@@ -1008,8 +1045,7 @@ var scManager = (function(){
             smState.loadFailures.isScenarioNameUnique = 0;
             resultObj.Results.Members.forEach(function(value) {
                 if (value.Name === smState.eventRequests[requestID].extras.ScenarioName) {
-                    modalMsg('erase');
-                    modalMsg('error', {
+                    pushMsg('error', {
                         title: 'Sorry!',
                         message: 'The proposed Scenario name already exists. Please choose another name.',
                         spinner: false,
@@ -1037,8 +1073,7 @@ var scManager = (function(){
                 (smState.loadFailures.isScenarioNameUnique)++;
                 isScenarioNameUnique(cb, cb2, requestID, subEvent);
             } else {
-                modalMsg('erase');
-                modalMsg('error', {
+                pushMsg('error', {
                     title: 'Sorry!',
                     message: 'We experienced a temporary challenge creating a new Scenario. Please try again.',
                     spinner: false,
@@ -1061,8 +1096,7 @@ var scManager = (function(){
             onFailure,
             newParamsObj = {};
 
-        modalMsg('erase');
-        modalMsg('status', {
+        pushMsg('status', {
             title: 'Deleting Scenario',
             message: 'Scenario ' + smState.smVals.Scenario + ' is being deleted. This may take a moment.',
             spinner: true,
@@ -1074,7 +1108,6 @@ var scManager = (function(){
 
         onSuccess = function() {
             var continueRequest = function(){
-                processingMsg();
                 cb(requestID, subEvent);
             };
 
@@ -1082,8 +1115,7 @@ var scManager = (function(){
             newParamsObj[SAVED_SCENARIO_KEY] = DEFAULT_SCENARIO_NAME;
             addParamsToUrl(newParamsObj);
 
-            modalMsg('erase');
-            modalMsg('success', {
+            pushMsg('success', {
                 title: 'Success',
                 message: 'Scenario ' + smState.smVals.Scenario + ' was successfully deleted.',
                 spinner: false,
@@ -1104,8 +1136,7 @@ var scManager = (function(){
                 (smState.loadFailures.scenarioDeleteConfirmed)++;
                 scenarioDeleteConfirmed(cb, requestID, subEvent);
             } else {
-                modalMsg('erase');
-                modalMsg('error', {
+                pushMsg('error', {
                     title: 'Delete Failed',
                     message: 'Scenario ' + smState.smVals.Scenario + ' failed to delete.',
                     spinner: false,
@@ -1130,8 +1161,7 @@ var scManager = (function(){
                 cancelRequest(requestID);
             };
 
-        modalMsg('erase');
-        modalMsg('status', {
+        pushMsg('status', {
             title: 'Confirm Delete',
             message: 'Are you sure you want to delete Scenario ' + smState.smVals.Scenario + '?',
             spinner: false,
@@ -1201,8 +1231,6 @@ var scManager = (function(){
             onSuccess,
             onFailure;
 
-        processingMsg();
-
         /* TODO: see if you can align the dimRows values below with smState.smVals and DD_ON_LOAD */
 
         for (key in dimRows) {
@@ -1248,8 +1276,7 @@ var scManager = (function(){
 
         onSuccess = function() {
             smState.loadFailures.saveDimensionSelections = 0;
-            modalMsg('erase');
-            modalMsg('success', {
+            pushMsg('success', {
                 title: 'Success',
                 message: 'Scenario "' + smState.smVals.Scenario + '" was updated.',
                 spinner: false,
@@ -1266,7 +1293,6 @@ var scManager = (function(){
                 (smState.loadFailures.saveDimensionSelections)++;
                 saveDimensionSelections();
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('Scenario "' + smState.smVals.Scenario + '"', [saveDimensionSelections]);
                 smState.loadFailures.saveDimensionSelections = 0;
             }
@@ -1291,8 +1317,6 @@ var scManager = (function(){
             key,
             onSuccess,
             onFailure;
-
-        processingMsg();
 
         if (smState.smVals.Scenario !== DEFAULT_SCENARIO_NAME) {
             // set to var set in getAssumptions()
@@ -1321,7 +1345,6 @@ var scManager = (function(){
 
             onSuccess = function() {
                 smState.loadFailures.saveAssumptions = 0;
-                modalMsg('erase');
                 cb(requestID, subEvent);
             };
 
@@ -1330,7 +1353,6 @@ var scManager = (function(){
                     (smState.loadFailures.saveAssumptions)++;
                     saveAssumptions();
                 } else {
-                    modalMsg('erase');
                     failedToUpdateMsg('The assumptions/projection change just made ', [saveAssumptions]);
                     smState.loadFailures.saveAssumptions = 0;
                 }
@@ -1529,7 +1551,6 @@ var scManager = (function(){
                 loadAssumptions(buildAssumptions, postRequestProcessor, rID, subEv);
                 break;
             case 'BeginProcessing':
-                modalMsg('erase');
                 processingMsg();
                 postRequestProcessor(rID, subEv);
                 break;
@@ -1554,7 +1575,7 @@ var scManager = (function(){
                 loadDimensionSelections(showDimensionSelections, postRequestProcessor, rID, subEv);
                 break;
             case 'FinishProcessing':
-                modalMsg('erase'); // need condition so this doesn't accidentally overwrite other modal msgs, i.e. failure msgs
+                clearAllMsgs();
                 postRequestProcessor(rID, subEv);
                 break;
             case 'HideActsAndAss':
@@ -1666,7 +1687,6 @@ var scManager = (function(){
                 (smState.loadFailures.loadCurrScenarioData)++;
                 loadCurrScenarioData(cb, cb2, requestID, subEvent);
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('The "Current Scenario" drop down', [recursiveCall]);
                 smState.loadFailures.loadCurrScenarioData = 0;
             }
@@ -1707,7 +1727,6 @@ var scManager = (function(){
                 (smState.loadFailures[failureName])++;
                 loadSingleDimensionData(cb, method, parameters, cb2, requestID, subEvent);
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('The ' + parameters.DimName + ' drop down', [recursiveCall]);
                 smState.loadFailures[failureName] = 0;
             }
@@ -1794,7 +1813,6 @@ var scManager = (function(){
                 (smState.loadFailures.loadDimensionSelections)++;
                 loadDimensionSelections(cb, cb2, requestID, subEvent);
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('Some of the data', [recursiveCall]);
                 smState.loadFailures.loadDimensionSelections = 0;
             }
@@ -1842,7 +1860,6 @@ var scManager = (function(){
                 (smState.loadFailures.loadActuals)++;
                 loadActuals(cb, cb2, requestID, subEvent);
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('The actual/current data', [tryAgain]);
                 smState.loadFailures.loadActuals = 0;
             }
@@ -1889,7 +1906,6 @@ var scManager = (function(){
                 (smState.loadFailures.loadAssumptions)++;
                 loadAssumptions(cb, cb2, requestID, subEvent)
             } else {
-                modalMsg('erase');
                 failedToUpdateMsg('The projection/assumption data', [tryAgain]);
                 smState.loadFailures.loadAssumptions = 0;
             }
@@ -2361,8 +2377,7 @@ var scManager = (function(){
 
         thisSection.on('click', '.select2-selection', function() {
             if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
-                modalMsg('erase');
-                modalMsg('error', {
+                pushMsg('error', {
                     title: 'Choose Another Scenario',
                     message: 'Projections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario to make projections.',
                     spinner: false,
@@ -2378,7 +2393,6 @@ var scManager = (function(){
         thisDDL.change(function(){
             init('selectAssumption');
         });
-
     }
 
     function generalSMEventsHandler(){
