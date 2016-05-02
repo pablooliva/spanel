@@ -542,7 +542,7 @@ var scManager = (function(){
                     thisSel = $J('#' + obj);
                     thisSel.find('option:selected').removeAttr('selected');
                     thisSel.find('option:first').attr('selected', 'selected');
-                    //thisSel.val($J('#' + obj + 'option:first').val()).trigger('change', false);
+                    thisSel.val($J('#' + obj + 'option:first').val());
                     $J('#' + obj + '-container').addClass('hidden');
                 }
             }
