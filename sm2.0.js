@@ -6,7 +6,7 @@
 
 var scManager = (function(){
 
-    /** Private Properties **/
+    /** Properties **/
 
     /*
     TODO: we may be able to align smState.smVals and saveDimensionSelections() values
@@ -1224,7 +1224,7 @@ var scManager = (function(){
         }
     }
 
-    function saveDimensionSelections() {
+    function saveDimensionSelections(cb, requestID, subEvent) {
         var localDimResults = $J.extend(true, {}, dimensionsResults),
             dimRows = localDimResults.RowSet.Rows[0],
             key,
@@ -1275,6 +1275,10 @@ var scManager = (function(){
         smState.loadFailures.saveDimensionSelections = smState.loadFailures.saveDimensionSelections || 0;
 
         onSuccess = function() {
+            var continueRequest = function(){
+                cb(requestID, subEvent);
+            };
+
             smState.loadFailures.saveDimensionSelections = 0;
             pushMsg('success', {
                 title: 'Success',
@@ -1282,7 +1286,7 @@ var scManager = (function(){
                 spinner: false,
                 confirm: {
                     msg: 'Ok',
-                    funcs: []
+                    funcs: [continueRequest]
                 },
                 deny: {}
             });
@@ -1297,6 +1301,8 @@ var scManager = (function(){
                 smState.loadFailures.saveDimensionSelections = 0;
             }
         };
+
+        debugger;
 
         $J.ajax({
             type: "POST",
@@ -1434,6 +1440,19 @@ var scManager = (function(){
                     {
                         CollapseActAndAss: false,
                         ResetSMDisplay: false,
+                        FinishProcessing: false
+                    }
+                ];
+                break;
+            case 'saveScenario':
+                requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
+                    {
+                        SaveScenario: false
+                    },
+                    {
                         FinishProcessing: false
                     }
                 ];
@@ -1588,6 +1607,9 @@ var scManager = (function(){
                 break;
             case 'Scenarios':
                 loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
+                break;
+            case 'SaveScenario':
+                saveDimensionSelections(postRequestProcessor, rID, subEv);
                 break;
             case 'SelectAssumption':
                 saveAssumptions(postRequestProcessor, rID, subEv);
@@ -2292,7 +2314,7 @@ var scManager = (function(){
         // *** Update Scenario ***
         // ***********************
         $J('#update-scenario-btn').click(function() {
-            saveDimensionSelections();
+            init('saveScenario');
         });
 
         // *** Delete Scenario ***
