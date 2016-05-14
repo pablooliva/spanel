@@ -605,11 +605,9 @@ var scManager = (function(){
             if (thisText !== DEF_CHILD_OPT_NAME) {
                 rtText = thisText;
             }
-            if (isDefinedAndTrue(thisSel.find(':selected').attr('value'))) {
-                thisElem = $J(this).val(); // non-blank values will be params for TM1 web methods
-                smState.smVals[thisSeldimid] = thisElem;
-                rtText = thisElem;
-            }
+            thisElem = $J(this).val(); // non-blank values will be params for TM1 web methods
+            smState.smVals[thisSeldimid] = thisElem;
+            rtText = thisElem;
             updateRunningTab(thisSeldimid, rtText);
         });
     }
@@ -1192,9 +1190,6 @@ var scManager = (function(){
 
         ddO = directDeliveryObj ? directDeliveryObj : smState.eventRequests[requestID].extras;
 
-        /*consoleLog('selectDimension', ['pre'], ddO, 'warn');
-        debugger;*/
-
         // if current select has an option previously selected, clear children of previous option
         if (ddO.thisSelectID in wasSelectedVal) {
             clearChildSelect(wasSelectedVal[ddO.thisSelectID]);
@@ -1301,8 +1296,6 @@ var scManager = (function(){
                 smState.loadFailures.saveDimensionSelections = 0;
             }
         };
-
-        debugger;
 
         $J.ajax({
             type: "POST",
@@ -1921,12 +1914,12 @@ var scManager = (function(){
 
         onFailure = function() {
             var tryAgain = function(){
-                loadAssumptions(cb, cb2, requestID, subEvent)
+                loadAssumptions(cb, cb2, requestID, subEvent);
             };
 
             if (smState.loadFailures.loadAssumptions < MAX_FAILS){
                 (smState.loadFailures.loadAssumptions)++;
-                loadAssumptions(cb, cb2, requestID, subEvent)
+                loadAssumptions(cb, cb2, requestID, subEvent);
             } else {
                 failedToUpdateMsg('The projection/assumption data', [tryAgain]);
                 smState.loadFailures.loadAssumptions = 0;
