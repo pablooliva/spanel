@@ -993,12 +993,13 @@ var scManager = (function(){
             newParamsObj[SAVED_SCENARIO_KEY] = smState.eventRequests[requestID].extras.ScenarioName;
             addParamsToUrl(newParamsObj);
 
+            deleteMsg();
             pushMsg('success', {
                 title: 'Success',
-                message: 'Scenario "' + smState.eventRequests[requestID].extras.ScenarioName + '" was created.',
+                message: 'Scenario "' + smState.eventRequests[requestID].extras.ScenarioName + '" was created and can now be loaded.',
                 spinner: false,
                 confirm: {
-                    msg: 'Ok',
+                    msg: 'Continue',
                     funcs: [continueRequest]
                 },
                 deny: {}
@@ -1113,6 +1114,7 @@ var scManager = (function(){
             newParamsObj[SAVED_SCENARIO_KEY] = DEFAULT_SCENARIO_NAME;
             addParamsToUrl(newParamsObj);
 
+            deleteMsg();
             pushMsg('success', {
                 title: 'Success',
                 message: 'Scenario ' + smState.smVals.Scenario + ' was successfully deleted.',
@@ -1452,6 +1454,9 @@ var scManager = (function(){
                 break;
             case 'deleteScenario':
                 requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
                     {
                         DeleteScenario: false
                     },
@@ -2456,8 +2461,13 @@ var scManager = (function(){
         smInit: init,
         getSMVals: smState.smVals,
         getTM1CurrentYear: getTM1CurrentYear,
-        tm1CurrentYear: tm1CurrentYear
+        tm1CurrentYear: tm1CurrentYear,
+        processingMsg: processingMsg,
+        clearAllMsgs: clearAllMsgs
     };
 })();
 
-scManager.smInit('pageLoad');
+/*
+    TODO: To be called from within each esApp script
+    scManager.smInit('pageLoad');
+*/
