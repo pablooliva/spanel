@@ -1381,6 +1381,19 @@ var scManager = (function(){
             };
 
         switch(event){
+            case 'dimensionsPreLoad':
+                requestObj.subEvents = [
+                    {
+                        BeginProcessing: false
+                    },
+                    {
+                        DimensionsPreLoad: false
+                    },
+                    {
+                        FinishProcessing: false
+                    }
+                ];
+                break;
             case 'pageLoad':
                 requestObj.subEvents = [
                     { // stage 0
@@ -1541,7 +1554,7 @@ var scManager = (function(){
                 ];
                 break;
             default:
-                consoleLog('requestBuilder', ['The ' + event + 'event does not exist.'], null, 'error');
+                consoleLog('requestBuilder', ['The ' + event + ' event does not exist.'], null, 'error');
         }
 
         smState.eventRequests[tStamp] = requestObj;
@@ -1587,6 +1600,9 @@ var scManager = (function(){
                 break;
             case 'Dimensions':
                 loadDimensionsData(buildDimensionsDD, postRequestProcessor, rID, subEv);
+                break;
+            case 'DimensionsPreLoad':
+                loadDimensionsData(null, postRequestProcessor, rID, subEv);
                 break;
             case 'DimensionSelections':
                 loadDimensionSelections(showDimensionSelections, postRequestProcessor, rID, subEv);
@@ -1734,7 +1750,11 @@ var scManager = (function(){
             (smState.singleDimensionDataSuccesses)++;
             if (smState.singleDimensionDataSuccesses === Object.keys(DD_ON_LOAD).length){
                 smState.singleDimensionDataSuccesses = 0;
-                cb(cb2, requestID, subEvent);
+                if (cb){
+                    cb(cb2, requestID, subEvent);
+                } else {
+                    cb2(requestID, subEvent);
+                }
             }
         };
 
@@ -2457,13 +2477,14 @@ var scManager = (function(){
         requestHandler(requestID);
     }
 
+    /** Exposed Methods and Properties **/
+
     return {
         smInit: init,
         getSMVals: smState.smVals,
         getTM1CurrentYear: getTM1CurrentYear,
         tm1CurrentYear: tm1CurrentYear,
-        processingMsg: processingMsg,
-        clearAllMsgs: clearAllMsgs
+        processingMsg: processingMsg
     };
 })();
 
