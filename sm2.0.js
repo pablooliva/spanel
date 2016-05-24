@@ -955,17 +955,18 @@ var scManager = (function(){
                 "SubsetName": "Current"
             },
             onSuccess,
-            onFailure;
+            onFailure,
+            self = this;
 
         onSuccess = function(resultObj) {
-            tm1CurrentYear = resultObj.Results.Members[0].ID;
+            self.tm1CurrentYear = resultObj.Results.Members[0].ID;
         };
 
         onFailure = function() {
             getTM1CurrentYear();
         };
 
-        es.get("TM1SubsetMembers", params, onSuccess, onFailure, true);
+        es.get("TM1SubsetMembers", params, onSuccess, onFailure, false);
     }
 
     function createNewScenario(cb, requestID, subEvent) {
@@ -1368,6 +1369,10 @@ var scManager = (function(){
                 success: onSuccess
             });
         }
+    }
+
+    function setPeriodToYearOnly(tOrF){
+        periodYearOnly = tOrF;
     }
 
     /** Request Handling **/
@@ -2484,7 +2489,8 @@ var scManager = (function(){
         getSMVals: smState.smVals,
         getTM1CurrentYear: getTM1CurrentYear,
         tm1CurrentYear: tm1CurrentYear,
-        processingMsg: processingMsg
+        processingMsg: processingMsg,
+        setPeriodToYearOnly: setPeriodToYearOnly
     };
 })();
 
