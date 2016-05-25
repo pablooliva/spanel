@@ -549,6 +549,15 @@ var scManager = (function(){
         });
     }
 
+    function toggleRecalcBtn(scName){
+        if (scName === DEFAULT_SCENARIO_NAME){
+            $J('#update-scenario-btn').hide();
+        } else {
+            $J('#update-scenario-btn').show();
+        }
+
+    }
+
     function setScenarioStateAndUrl(scName){
         var urlParamsObj = {};
 
@@ -558,6 +567,7 @@ var scManager = (function(){
         addParamsToUrl(urlParamsObj);
         rewriteLinks();
         adjustTabForScenario();
+        toggleRecalcBtn(scName);
     }
 
     function formatStringSpace(thisStr) {
@@ -606,9 +616,10 @@ var scManager = (function(){
                 rtText = thisText;
             }
             thisElem = $J(this).val(); // non-blank values will be params for TM1 web methods
-            smState.smVals[thisSeldimid] = thisElem;
-            rtText = thisElem;
-            updateRunningTab(thisSeldimid, rtText);
+            if (thisElem || rtText){
+                smState.smVals[thisSeldimid] = thisElem;
+                updateRunningTab(thisSeldimid, rtText);
+            }
         });
     }
 
@@ -1229,7 +1240,7 @@ var scManager = (function(){
             onSuccess,
             onFailure;
 
-        /* TODO: see if you can align the dimRows values below with smState.smVals and DD_ON_LOAD */
+        updateSMDimensionVals();
 
         for (key in dimRows) {
             if (dimRows.hasOwnProperty(key)) {
@@ -1273,21 +1284,8 @@ var scManager = (function(){
         smState.loadFailures.saveDimensionSelections = smState.loadFailures.saveDimensionSelections || 0;
 
         onSuccess = function() {
-            var continueRequest = function(){
-                cb(requestID, subEvent);
-            };
-
             smState.loadFailures.saveDimensionSelections = 0;
-            pushMsg('success', {
-                title: 'Success',
-                message: 'Scenario "' + smState.smVals.Scenario + '" was updated.',
-                spinner: false,
-                confirm: {
-                    msg: 'Ok',
-                    funcs: [continueRequest]
-                },
-                deny: {}
-            });
+            cb(requestID, subEvent);
         };
 
         onFailure = function() {
@@ -1373,6 +1371,28 @@ var scManager = (function(){
 
     function setPeriodToYearOnly(tOrF){
         periodYearOnly = tOrF;
+    }
+
+    function getLFFormattedName(dataToGet){
+        var formattedName;
+
+        switch (dataToGet) {
+            case 'Actuals':
+                formattedName = 'Actuals_' + smState.smVals.Scenario;
+                break;
+            case 'Assumptions':
+                formattedName = 'Assumptions_' + smState.smVals.Scenario;
+                break;
+            default:
+                return null;
+        }
+
+        return formattedName;
+    }
+
+    function clearLocalForage(){
+        localforage.removeItem(getLFFormattedName('Actuals'));
+        localforage.removeItem(getLFFormattedName('Assumptions'));
     }
 
     /** Request Handling **/
@@ -1463,7 +1483,15 @@ var scManager = (function(){
                         BeginProcessing: false
                     },
                     {
-                        SaveScenario: false
+                        ClearLF: false
+                    },
+                    {
+                        SaveDimensions: false,
+                        SaveAssumptions: false
+                    },
+                    {
+                        Charts: false,
+                        Actuals: false
                     },
                     {
                         FinishProcessing: false
@@ -1528,33 +1556,7 @@ var scManager = (function(){
             case 'selectDimension':
                 requestObj.subEvents = [
                     {
-                        BeginProcessing: false
-                    },
-                    {
                         SelectDimension: false
-                    },
-                    {
-                        Charts: false,
-                        Actuals: false
-                    },
-                    {
-                        FinishProcessing: false
-                    }
-                ];
-                break;
-            case 'selectAssumption':
-                requestObj.subEvents = [
-                    {
-                        BeginProcessing: false
-                    },
-                    {
-                        SelectAssumption: false
-                    },
-                    {
-                        Charts: false
-                    },
-                    {
-                        FinishProcessing: false
                     }
                 ];
                 break;
@@ -1593,6 +1595,10 @@ var scManager = (function(){
                 assembleCharts();
                 postRequestProcessor(rID, subEv);
                 break;
+            case 'ClearLF':
+                clearLocalForage();
+                postRequestProcessor(rID, subEv);
+                break;
             case 'CollapseActAndAss':
                 collapseActualsAndAssumptions();
                 postRequestProcessor(rID, subEv);
@@ -1627,15 +1633,14 @@ var scManager = (function(){
             case 'Scenarios':
                 loadCurrScenarioData(buildCurrScenarioDD, postRequestProcessor, rID, subEv);
                 break;
-            case 'SaveScenario':
+            case 'SaveDimensions':
                 saveDimensionSelections(postRequestProcessor, rID, subEv);
                 break;
-            case 'SelectAssumption':
+            case 'SaveAssumptions':
                 saveAssumptions(postRequestProcessor, rID, subEv);
                 break;
             case 'SelectDimension':
                 selectDimension(rID);
-                updateSMDimensionVals();
                 postRequestProcessor(rID, subEv);
                 break;
             case 'SelectScenario':
@@ -1746,9 +1751,7 @@ var scManager = (function(){
 
         onSuccess = function(resultObj, localTest) {
             if (localTest !== 'fromLocalStorage'){
-                localforage.setItem(formattedName, resultObj, function(){
-                    // do nothing
-                });
+                localforage.setItem(formattedName, resultObj);
             }
             smState.loadFailures[failureName] = 0;
             smState.DimensionsData[formattedName] = resultObj;
@@ -1869,19 +1872,24 @@ var scManager = (function(){
 
     function loadActuals(cb, cb2, requestID, subEvent) {
         var webMethod = "ScenarioManagerActuals", // web method: ScenarioManagerActuals
+            formattedName,
             tempArr = [],
             onSuccess,
             onFailure;
 
         smState.loadFailures.loadActuals = smState.loadFailures.loadActuals || 0;
+        formattedName = getLFFormattedName('Actuals');
 
-        onSuccess = function(resultObj) {
+        onSuccess = function(resultObj, localTest) {
             var actuals = resultObj.Results.RowSet.Rows,
                 key,
                 actSect,
                 actTitle,
                 actVal;
 
+            if (localTest !== 'fromLocalStorage'){
+                localforage.setItem(formattedName, resultObj);
+            }
             smState.loadFailures.loadActuals = 0;
 
             for (key in actuals) {
@@ -1910,24 +1918,35 @@ var scManager = (function(){
             }
         };
 
-        es.get(webMethod, filterSMVals(['Scenario']), onSuccess, onFailure, true);
+        localforage.getItem(formattedName, function(err, val){
+            if (val !== null){
+                onSuccess(val, 'fromLocalStorage');
+            } else {
+                es.get(webMethod, filterSMVals(['Scenario']), onSuccess, onFailure, true);
+            }
+        });
     }
 
     function loadAssumptions(cb, cb2, requestID, subEvent) {
         var webMethod = "ScenarioAssumptionsChange", // web method: ScenarioAssumptionsChange
+            formattedName,
             params = {},
             tempArr = [],
             onSuccess,
             onFailure;
 
         smState.loadFailures.loadAssumptions = smState.loadFailures.loadAssumptions || 0;
+        formattedName = getLFFormattedName('Assumptions');
 
-        onSuccess = function(resultObj) {
+        onSuccess = function(resultObj, localTest) {
             var assumptions = resultObj.Results.RowSet.Rows,
                 assSect,
                 assTitle,
                 assVal;
 
+            if (localTest !== 'fromLocalStorage'){
+                localforage.setItem(formattedName, resultObj);
+            }
             smState.loadFailures.loadAssumptions = 0;
             assumptionsResults = resultObj.Results;
 
@@ -1957,8 +1976,14 @@ var scManager = (function(){
 
         };
 
-        params.Scenario = smState.smVals.Scenario;
-        es.get(webMethod, params, onSuccess, onFailure, true);
+        localforage.getItem(formattedName, function(err, val){
+            if (val !== null){
+                onSuccess(val, 'fromLocalStorage');
+            } else {
+                params.Scenario = smState.smVals.Scenario;
+                es.get(webMethod, params, onSuccess, onFailure, true);
+            }
+        });
     }
 
     /** Build Components **/
@@ -2302,6 +2327,7 @@ var scManager = (function(){
             $J('#cur-scenario-tab').show();
             $J('#smFilters').show();
             $J('#smEntities').show();
+            $J('#update-scenario-btn').show();
         });
 
         // *** Create Scenario ***
@@ -2312,6 +2338,7 @@ var scManager = (function(){
             $J('#smFilters').hide();
             $J('#smEntities').hide();
             $J('#cur-scenario-tab').hide();
+            $J('#update-scenario-btn').hide();
             $J('#new-scenario-tab').show();
             nameInput.val('');
             nameInput.focus();
@@ -2334,16 +2361,16 @@ var scManager = (function(){
             }
         });
 
-        // *** Update Scenario ***
-        // ***********************
-        $J('#update-scenario-btn').click(function() {
-            init('saveScenario');
-        });
-
         // *** Delete Scenario ***
         // ***********************
         $J('#delete-scenario-btn').click(function() {
             init('deleteScenario');
+        });
+
+        // *** Update Scenario ***
+        // ***********************
+        $J('#update-scenario-btn').click(function() {
+            init('saveScenario');
         });
     }
 
@@ -2371,6 +2398,21 @@ var scManager = (function(){
                 var thisRowLabel = $J(this),
                     divToShow,
                     containerToShow;
+
+                if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
+                    pushMsg('error', {
+                        title: 'Choose Another Scenario',
+                        message: 'Dimension selections are allowed in Scenarios other than ' + DEFAULT_SCENARIO_NAME + '. Please choose another Scenario.',
+                        spinner: false,
+                        confirm: {
+                            msg: 'Ok',
+                            funcs: [clearAllMsgs]
+                        },
+                        deny: {}
+                    });
+
+                    return;
+                }
 
                 $J('.dimRowLabel').removeClass('dimRowLabelFocus'); // clear hover styling from all row labels
                 thisRowLabel.addClass('dimRowLabelFocus'); // add hover styling to THIS row label
@@ -2414,11 +2456,9 @@ var scManager = (function(){
     }
 
     function assumptionDDLClickHandler(){
-        var thisSection = $J('#smEntities'),
-            thisDDL = $J('.varPercent');
+        var thisSection = $J('#smEntities');
 
         thisSection.unbind('click');
-        thisDDL.unbind('change');
 
         thisSection.on('click', '.select2-selection', function() {
             if (smState.smVals.Scenario === DEFAULT_SCENARIO_NAME) {
@@ -2428,15 +2468,11 @@ var scManager = (function(){
                     spinner: false,
                     confirm: {
                         msg: 'Ok',
-                        funcs: []
+                        funcs: [clearAllMsgs]
                     },
                     deny: {}
                 });
             }
-        });
-
-        thisDDL.change(function(){
-            init('selectAssumption');
         });
     }
 
