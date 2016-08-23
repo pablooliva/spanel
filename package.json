@@ -1,0 +1,30 @@
+{
+  "name": "scenariomanager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "sm2.0.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "webpack": "webpack --watch --progress --colors",
+    "dev": "SET NODE_ENV=dev & webpack-dev-server --inline",
+    "prod": "webpack --progress --colors --production"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pablooliva/spanel.git"
+  },
+  "author": "pablo oliva",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pablooliva/spanel/issues"
+  },
+  "homepage": "https://github.com/pablooliva/spanel#readme",
+  "devDependencies": {
+    "babel-core": "^6.13.2",
+    "babel-loader": "^6.2.5",
+    "babel-polyfill": "^6.13.0",
+    "babel-preset-es2015": "^6.13.2",
+    "webpack": "^1.13.2",
+    "webpack-dev-server": "^1.15.0"
+  }
+}
